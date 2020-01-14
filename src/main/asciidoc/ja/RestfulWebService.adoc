@@ -1,0 +1,347 @@
+include::_include_all.adoc[]
+
+[[RestfulWebService]]
+
+:sectnums: 4
+
+= RESTful Web Service
+
+[[RestfulWebService_Overview]]
+== {overview}
+{GL}では、{SB}におけるRESTful Web Serviceの実現に関連する機能について説明する。 +
+ +
+RESTful Web Serviceを提供する場合は、{SM}を使用することで実現できる。 +
+{SM}では、``MessageConverter``を使用することで、オブジェクトをJSONなどの形式に変換しレスポンスとして返すことができる。 +
+{SM}や``MessageConverter``の初期設定などは{SB}の{AC}によって自動で設定される。 +
+ +
+ 外部のRESTful Web Serviceを利用したアプリケーションを作成する場合、``RestTemplate``を用いて実現することができる。 +
+``RestTemplate``を使用することで、外部のRESTful Web Serviceに対してリクエストを送り、レスポンスを取得することができる。 +
+{SB}の{AC}が、クラスパス上に存在するHTTPクライアントのクラスを走査し、存在したクラスを組み込んで``RestTemplate``を使用できるようになる。 +
+ +
+また、{SB}ではJSONおよびXMLのレスポンスデータに対応している。 +
+それぞれパーサーライブラリが自動で設定され、文字列とオブジェクトの変換を行う。 +
+
+[NOTE]
+``RestTemplate``は https://docs.spring.io/spring/docs/current/javadoc-api/org/springframework/web/client/RestTemplate.html[JavaDoc]にもあるように、今後非推奨になる可能性がある。 +
+代替として``WebClient``が存在するが、{GL}では``RestTemplate``を用いて説明を行う。
+
+[[RestfulWebService_HowToUse]]
+== {how_to_use}
+
+[[RestfulWebService_HowToUse_Starter]]
+=== {starter_to_use}
+RESTful Web Serviceを実現するために下記のStarterをpom.xmlに追加する。 +
+
+* {SBSW}
+
+[NOTE]
+Jacksonなどを有効化する{SBS}-jsonに関しては、{SBSW}の依存関係に含まれるため、pom.xmlに追加する必要はない。
+
+[[RestfulWebService_HowToUse_AutoConfiguration]]
+=== {enable_auto_configuration}
+Starterを追加することで有効になる{AC}の中でRESTful Web Serviceと関係するものを下記に示す。
+
+[cols="20,80a", options="header"]
+.{enable_auto_configuration}
+|===
+|クラス名
+|概要
+
+|``org.springframework.boot.autoconfigure.`` +
+``web.servlet.WebMvcAutoConfiguration``
+|{SM}レイヤの設定を行う。
+
+|``org.springframework.boot.autoconfigure.`` +
+``web.client.RestTemplateAutoConfiguration``
+|``RestTemplate``を作成する``RestTemplateBuilder``を設定する。 +
+使用するHTTPクライアントは下記の順でクラスパス上を走査して、存在したものを適用する。 +
+
+* ``org.apache.http.client.HttpClient`` +
+* ``okhttp3.OkHttpClient`` +
+* ``java.net.HttpURLConnection``
+
+|``org.springframework.boot.autoconfigure.`` +
+``http.HttpMessageConverterAutoConfiguration``
+|HttpMessageConverterの設定を行う。 +
+XMLのパーサーライブラリの設定も行い、クラスパス上にJacksonのXML拡張が存在していればそちらが、なければJAXBが利用される。 +
+
+|``org.springframework.boot.autoconfigure.`` +
+``jackson.JacksonAutoConfiguration``
+|Jacksonの設定を行う。 +
+デフォルトで有効になる。
+
+|``org.springframework.boot.autoconfigure.`` +
+``gson.GsonAutoConfiguration``
+|Gsonの設定を行う。 +
+クラスパス上にGsonのライブラリが存在すれば有効になる。
+
+|``org.springframework.boot.autoconfigure.`` +
+``jsonb.JsonbAutoConfiguration``
+|Json-Bの設定を行う。 +
+クラスパス上にJSON-B APIと実装クラスが存在すれば有効になる。
+
+|===
+
+[[RestfulWebService_HowToUse_CusotmizePoint]]
+=== {customization_points}
+
+[[RestfulWebService_HowToUse_CusotmizePoint_Property]]
+==== {property_based_configuration}
+RESTful Web Serviceに関連するプロパティとして、{SM}のプロパティとパーサーライブラリのプロパティがあるが、{SM}に関しては<<SpringMVC.adoc#SpringMVC,SpringMVC>>を参照すること。 +
+パーサーライブラリとしてJacksonに関連するプロパティの代表例を下記に示す。 +
+
+[cols="20,15,65",options="header"]
+.Jacksonに設定されている代表的な設定値
+|===
+|プロパティ名
+|デフォルト値
+|概要
+
+|``spring.jackson.default-property-inclusion``
+|-
+|出力を行わないプロパティの条件を設定する。 +
+詳細は https://fasterxml.github.io/jackson-annotations/javadoc/2.10/com/fasterxml/jackson/annotation/JsonInclude.Include.html[JavaDoc]を参照すること。
+
+|``spring.jackson.deserialization.*``
+|-
+|デシリアライズする際の種々の条件をtrue/falseで設定できる。 +
+詳細は https://fasterxml.github.io/jackson-databind/javadoc/2.10/com/fasterxml/jackson/databind/DeserializationFeature.html[JavaDoc]を参照すること。
+
+|``spring.jackson.serialization.*``
+|-
+|シリアライズする際の種々の条件をtrue/falseで設定できる。 +
+詳細は https://fasterxml.github.io/jackson-databind/javadoc/2.10/com/fasterxml/jackson/databind/SerializationFeature.html[JavaDoc]を参照すること。
+
+|``spring.jackson.property-naming-strategy``
+|-
+|データをJSONに変換する際の命名規則を設定する。 +
+設定可能な値は https://fasterxml.github.io/jackson-databind/javadoc/2.10/com/fasterxml/jackson/databind/PropertyNamingStrategy.html[PropertyNamingStrategy]を参照すること。
+|===
+[[RestfulWebService_HowToUse_CusotmizePoint_Bean]]
+==== {bean_based_configuration}
+[[RestfulWebService_HowToUse_CusotmizePoint_Bean_RestTemplate]]
+===== RestTemplate
+``RestTemplate``は下記のクラスを使用することでカスタマイズが可能になる。 +
+
+[cols="10,20,70",options="header"]
+.RestTemplateのカスタマイズ方法
+|===
+|クラス名
+|カスタマイズ方法
+|概要
+
+|``org.springframework.boot.web.`` +
+``client.RestTemplateBuilder``
+|``RestTemplateAutoConfiguration``が作成したインスタンスをDI先でカスタマイズする。
+|カスタマイズの影響はDI先のクラス内に限定される。 +
+個別にカスタマイズを行う際に利用する。
+
+|``org.springframework.boot.web.`` +
+``client.RestTemplateCustomizer``
+|自身で実装したクラスBean定義する。
+|実装したクラスは``RestTemplateAutoConfiguration``で設定される``RestTemplateBuilder``にセットされる。 +
+共通したカスタマイズを行う際に利用する。
+|===
+
+
+[[RestfulWebService_HowToUse_CusotmizePoint_Bean_Parser]]
+===== パーサーライブラリ
+代表例として、JacksonのBean定義によるカスタマイズ方法について説明する。 +
+Jacksonの場合は、カスタマイズ用の``Jackson2ObjectMapperBuilderCustomizer``インターフェースが用意されているため、これを実装しBean定義することでカスタマイズが有効になる。 +
+
+[[RestfulWebService_HowToUse_Implementation]]
+=== {functional_how_to_use}
+RESTful Web Serviceを実現する際の実装例を下記に示す。 +
+本項で使用するオブジェクトを下記に示す。 +
+なお、Lombokを利用してgetter/setterを省略している。
+
+[source,java]
+.Person.java
+----
+@Data
+public class Person{
+    private String name;
+
+    private int age;
+}
+----
+
+[[RestfulWebService_HowToUse_Implementation_Response]]
+==== レスポンスとしてJSONを返す
+``RestController``を用いてリクエストに対してレスポンスとしてJSONを返す例を下記に示す。 +
+[source,java]
+.PersonController.java
+----
+@RestController //(1)
+public class PersonController{
+
+    @GetMapping("person") //(2)
+    public Person responsePerson(){
+        Person person = new Person();
+        person.setName("name");
+        person.setAge(30);
+        return person; //(3)
+    }
+}
+----
+[cols="10,90",options="header"]
+|===
+|項番
+|説明
+
+|(1)
+|RestControllerであることを宣言する。
+
+|(2)
+|マッピングするURIを設定する。
+
+|(3)
+|レスポンスとして渡すオブジェクトを返す。
+|===
+
+[[RestfulWebService_HowToUse_Implementation_Request]]
+==== 外部RESTful Web Serviceと連携する
+``RestTemplate``を用いて「<<RestfulWebService_HowToUse_Implementation_Response>>」で実装したRESTful Web Serviceを呼び出す実装例を下記に示す。 +
+
+[source,java]
+.CallRestfulWebService.java
+----
+@Service
+public class CallRestfulWebService {
+    @Autowired
+    RestTemplateBuilder builder; //(1)
+
+    private final String url = "http://xxx.yyy/person";
+
+    public Person getPerson() {
+        RestTemplate restTemplate = builder.build(); //(2)
+        Person person = restTemplate.getForObject(url, Person.class);//(3)
+        return person;
+    }
+}
+----
+
+[cols="10,90",options="header"]
+|===
+|項番
+|説明
+
+|(1)
+|RestTemplateBuilderは有効になっているため``@Autowired``で取得できる。
+
+|(2)
+|RestTemplateBuilderからRestTemplateを生成する。
+
+|(3)
+|外部RESTful Web Serviceを呼び出す。 +
+JSONからオブジェクトへの変換はJacksonなどのパーサーライブラリが自動で行う。
+|===
+[[RestfulWebService_HowToUse_Customize]]
+=== {customization_example}
+<<RestfulWebService_HowToUse_CusotmizePoint_Bean>>に示したように、``RestTemplate``をカスタマイズする方法はいくつか用意されているが、今回はCustomizerクラスをBean定義する方法で行う。 +
+Basic認証用のAuthorizationヘッダを追加するカスタマイズを行う。
+
+[source,java]
+.AuthenticationCustomizer.java
+----
+@Component //(1)
+public class AuthenticationCustomizer implements RestTemplateCustomizer /*(2)*/{
+
+    @Override
+    public void customize(RestTemplate restTemplate)/*(3)*/ {
+        new RestTemplateBuilder().basicAuthentication("username", "password").configure(restTemplate); //(4)
+
+    }
+}
+----
+[cols="10,90",options="header"]
+|===
+|項番
+|説明
+
+|(1)
+|Bean定義するためにアノテーションを付与する。
+
+|(2)
+|RestTemplateCustomizerインターフェースの実装クラスを作成する。
+
+|(3)
+|コールバックメソッドであるcustomizeメソッドを実装する。
+
+|(4)
+|Basic認証用のカスタマイズができるbasicAuthenticationメソッドを使用してカスタマイズする。
+|===
+
+上記のCustomizerは、{AC}により自動的にRestTemplateBuilderに渡されるため、RestTemplateを生成する際に特別な操作は必要ない。 +
+下記に例を示す。
+
+[source,java]
+.CallWebApiService.java
+----
+@Service
+public class CallWebApiService{
+    @Autowired
+    RestTemplateBuilder builder;
+
+    private final String url = "http://xxx.yyy.zz/get";
+
+    public String getAuthString(){
+        RestTemplate restTemplate = builder.build(); //(1)
+        return restTemplate.getForObject(url, String.class);
+    }
+}
+----
+[cols="10,90",options="header"]
+|===
+|項番
+|説明
+
+|(1)
+|AuthenticationCustomizerのcustomizeメソッドが自動的に実行される。
+|===
+[[RestfulWebService_HowToTest]]
+== {test}
+[[RestfulWebService_HowToTest_Feature]]
+=== {test_function}
+RESTful Web Serviceの各機能をテストする例として、``TestRestTemplate``が用意されている。 +
+``@SpringBootTest``アノテーションを利用したテストではデフォルトで有効になっており、テスト対象のアプリケーションにリクエストを送り、レスポンスを検証できるようになっている。 +
+``RestTemplate``と異なる点として、下記の設定が自動的に行われることが上げられる。 +
+
+* cookieやredirectがデフォルトで無視される。
+* テスト対象の{SB}アプリケーションのベースURLが組み込まれるため、リクエストを送る場合はベースURL以下を指定するだけでよい。
+
+TestRestTemplateによるテストの実装例を下記に示す。 +
+「<<RestfulWebService_HowToUse_Implementation_Response>>」で作成したAPIにリクエストを送り、レスポンスを検証する想定とする。
+
+[source,java]
+.TestRestTemplateTest.java
+----
+@SpringBootTest　//(1)
+public class TestRestTemplateTest{
+
+    @Autowired
+    private TestRestTemplate testRestTemplate; //(2)
+
+    @Test
+    public void test(){
+        ResponseEntity<Person> entity = RestestRestTemplate.getForEntity("/person", Person.class); //(3)
+
+        //omitted
+    }
+}
+----
+[cols="10,90", options = "header"]
+|===
+|項番
+|説明
+
+|(1)
+|``@SpringBootTest``アノテーションにより、TestRestTemplateが有効化される。
+
+|(2)
+|TestRestTemplateが有効化されているため、``@Autowired``で取得できる。
+
+|(2)
+|ベースURLは設定されているため、それ以下のパスを記載しリクエストを送信できる。 +
+レスポンスは型を指定することでパーサなどが自動的に変換を行ってくれる。
+|===

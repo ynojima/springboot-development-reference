@@ -1,0 +1,401 @@
+include::_include_all.adoc[]
+
+:sectnums: 4
+
+[[MessageManagement]]
+= メッセージ管理
+
+[[MessageManagement_OutLine]]
+== {overview}
+
+{SB}におけるメッセージの管理方法について説明する。 +
+
+メッセージとは、画面や帳票などに表示する固定文言、またはユーザによる画面操作の結果に応じて表示する動的文言を指す。 +
+一般的にメッセージは、メッセージプロパティファイルに外部化し管理することが推奨される。 +
+従来の{SF}では、メッセージプロパティファイルにアクセスするために、開発者が``MessageSource``をBean定義することを必要としていた。 +
+{SB}では、メッセージプロパティファイルをクラスパス上に配置するだけで自動的に``MessageSource``がBean定義され、メッセージプロパティファイルにアクセスできる。
+
+メッセージの国際化対応(i18n)も同様である。 +
+国際化とは、アプリケーションで表示するラベルやメッセージを特定の言語のみに固定せず、Localeと呼ばれる言語や国・地域を表す単位の指定により、複数言語の切替に対応させることである。 +
+従来の{SF}では、国際化対応するために、開発者がアプリケーションでサポートするLocaleを``AcceptHeaderLocaleResolver``にBean定義することを必要としていた。 +
+{SB}では、アプリケーションでサポートするLocaleのメッセージプロパティファイルをクラスパス上に配置するだけで、自動的に``AcceptHeaderLocaleResolver``がBean定義され、国際化対応される。
+
+[[MessageManagement_HowToUse]]
+== {how_to_use}
+[[MessageManagement_HowToUse_Starter]]
+=== {starter_to_use}
+``{SBS}``のみで使用可能になるため、{SI}で「Dependencies」を指定する必要はない。
+
+{SM}を利用したWebアプリケーションで国際化対応する場合、下記に示すStarterを``pom.xml``に追記する。
+
+* ``{SBSW}``
+
+[[MessageManagement_HowToUse_AutoConfiguration]]
+=== {enable_auto_configuration}
+``{SBS}``で{enable_auto_configuration}を下記に示す。 +
+[cols="20,80", options="header"]
+.``{SBS}``で{enable_auto_configuration}
+|===
+|クラス名
+|概要
+
+|``org.springframework.boot.autoconfigure.`` +
+``context.MessageSourceAutoConfiguration``
+|クラスパス上に存在するメッセージプロパティファイルの読み込み、``MessageSource``の生成、Bean定義をする。
+
+|``org.springframework.boot.autoconfigure.`` +
+``context.MessageSourceProperties``
+|``spring.messages.*``で設定されるプロパティの値を保持する。
+|===
+
+``{SBSW}``のStarterで有効になる{AC}の中で国際化対応に重要なものを下記に示す。 +
+[cols="20,80", options="header"]
+.``{SBSW}``で{enable_auto_configuration}
+|===
+|クラス名
+|概要
+
+|``org.springframework.boot.autoconfigure.`` +
+``web.servlet.WebMvcAutoConfiguration``
+|``LocaleResolver``の生成、Bean定義をする。
+
+|``org.springframework.boot.autoconfigure.`` +
+``web.servlet.WebMvcProperties``
+|``spring.mvc.locale*``で設定されるプロパティの値を保持する。
+|===
+
+[IMPORTANT]
+.メッセージプロパティファイルのYAML形式について
+====
+メッセージプロパティファイルは、デフォルトの状態ではYAML形式に非対応である。 +
+Properties形式で配置しなければ読み込まれないため、留意すること。
+====
+
+[[MessageManagement_HowToUse_CustomizePoint]]
+=== {customization_points}
+[[MessageManagement_HowToUse_CustomizePoint_Property]]
+==== {property_based_configuration}
+``spring.messages.* ``もしくは``spring.mvc.locale* ``に用意されているプロパティでカスタマイズが可能である。 +
+メッセージ管理のプロパティ、国際化対応のプロパティを下記に示す。詳細については {reference_url}#appendix[公式リファレンスの付録] を参照すること。 +
+
+[cols="20,20,60",options="header"]
+.代表的な設定値
+|===
+|プロパティ名
+|デフォルト値
+|概要
+
+|``spring.messages.always-use-message-format``
+|FALSE
+|引数なしメッセージにもMessageFormatの有効/無効を設定する。
+
+|``spring.messages.basename``
+|messages
+|メッセージプロパティファイル名、クラスパスからの相対パスを設定する。 +
+
+|``spring.messages.cache-duration``
+|-
+|キャッシュの生存期間を設定する。 +
+``spring.messages.cache.duration``が設定されていない場合、常にキャッシュされる。 +
+また、日、時、分、秒の単位を示す接尾辞(ASCIIでD、H、M、S)が指定されていない場合、秒が適用される。
+
+|``spring.messages.encoding``
+|UTF-8
+|文字エンコードを設定する。
+
+|``spring.messages.use-code-as-default-message``
+|FALSE
+|メッセージキーからメッセージを解決できない場合、デフォルトメッセージの使用の有効/無効を設定する。 +
+TRUEの場合、``NoSuchMessageException``をスローする代わりにメッセージキーがそのまま返却される。 +
+メッセージが定義されていないことが（例外で）検知できなくなるため、本番環境での使用は推奨しない。 +
+FALSEの場合、``NoSuchMessageException``をスローする。 +
+|===
+
+[cols="20,20,60a",options="header"]
+.国際化対応のプロパティ設定
+|===
+|プロパティ
+|デフォルト値
+|概要
+
+|``spring.mvc.locale``
+|-
+|Localeを設定する。 +
+``spring.mvc.locale``が設定されていない場合、HTTPヘッダーのAccept-LanguageをLocaleに設定する。
+
+|``spring.mvc.locale-resolver``
+|ACCEPT_HEADER
+|Locale未指定時の解決方法。 +
+HTTPリクエストでLocaleが未指定である場合、Localeを決定する方法を設定する。 +
+ACCEPT_HEADERの場合、HTTPヘッダーのAccept-LanguageのLocaleを使用する。 +
+FIXEDの場合、``spring.mvc.locale``で設定したLocaleを使用する。
+
+|``spring.messages.fallback-to-system-locale``
+|TRUE
+|クライアントから指定されたLocaleのメッセージプロパティファイルが見つからない場合、下記が適用される。 +
+TRUEの場合、以下の順番で該当するLocaleのメッセージプロパティファイルを走査する。
+
+. JVMに指定されているLocale
+. OSに指定されているLocale
+
+FALSEの場合、デフォルトのメッセージプロパティファイル(basenameが``massages``の場合、``messages.properties``)を使用する。 +
+|===
+
+[IMPORTANT]
+.``spring.messages.basename``プロパティについて
+====
+``spring.messages.basename``プロパティに設定した値は、デフォルトの設定に追加するのではなく上書きする。 +
+複数指定する場合、下記のように「,」区切りで指定する。 +
+なお、ディレクトリのネスト表現方法する場合、「.」もしくは「/」で表現する。 +
+[source, YAML]
+.application.yml
+----
+spring:
+  messages:
+    basename: messages, i18n/messages
+----
+====
+
+[[MessageManagement_HowToUse_Implementation]]
+=== {functional_how_to_use}
+
+[[MessageManagement_HowToUse_Implementation_Locale]]
+==== Accept-LanguageによるLocaleの切替
+Accept-LanguageでLocaleを指定することで、Localeごとにメッセージプロパティファイルを読み込めることを確認する。 +
+Accept-LanguageのLocaleに対応するメッセージを返すControllerの実装例を示す。 +
+まず、下記のメッセージプロパティファイルを``src/main/resources/i18n/``直下に配置する。
+
+[source, properties]
+.messages_ja.properties
+----
+message.welcome=こんにちは
+----
+
+[source, properties]
+.messages_en.properties
+----
+message.welcome=Hello
+----
+
+[source, properties]
+.messages.properties
+----
+message.welcome=Default Message
+----
+
+また、``src/main/resources/i18n/``直下のメッセージプロパティファイルを読み込むために、``application.yml``に下記の設定を記述する。
+[source, YAML]
+.application.yml
+----
+spring:
+  messages:
+    # (1)
+    basename: i18n/messages
+    # (2)
+    fallback-to-system-locale: false
+----
+[cols="10,90",options="header"]
+.application.ymlの説明
+|===
+|項番
+|概要
+
+|(1)
+|クラスパスからの相対パスを``src/main/resources/i18n``とし、メッセージプロパティファイル名を``messages``と定義する。
+
+|(2)
+|Accept-Languageで指定したLocale(``messages_{Locale}.properties``)が``src/main/resources/i18n``下にない場合、``messages.properties``からメッセージを取得する。
+|===
+
+次に、Controllerを実装する。
+
+[source, java]
+.MessageController
+----
+@RestController
+public class MessageController {
+
+    @Autowired // (1)
+    private MessageSource msg;
+
+    @GetMapping
+    public String getMessage(Locale locale) {
+        return msg.getMessage("message.welcome", null, locale);
+    }
+}
+
+----
+[cols="10,90",options="header"]
+.MessageControllerの説明
+|===
+|項番
+|概要
+
+|(1)
+|``MessageSourceAutoConfiguration``で生成された``MessageSource``をインジェクションする。
+|===
+
+Accept-Languageを下記の4つで実行し、リクエストとレスポンスの例を示す。
+
+* ``Accept-Language: ja``
+* ``Accept-Language: en``
+* ``Accept-Language: XX``
+* 指定しない
+
+``Accept-Language: ja``の場合、``messages_ja.properties``で設定した「こんにちは」が返却される。 +
+
+*[リクエスト]*
+[source, HTTP]
+----
+GET / HTTP/1.1
+Accept-Language: ja
+Host: localhost:8080
+----
+
+*[レスポンス]*
+[source, HTTP]
+----
+HTTP/1.1 200
+Content-Type: text/plain;charset=UTF-8
+Content-Length: 15
+
+こんにちは
+----
+
+``Accept-Language: en``の場合、``messages_en.properties``で設定した「Hello」が返却される。
+
+*[リクエスト]*
+[source, HTTP]
+----
+GET / HTTP/1.1
+Accept-Language: en
+Host: localhost:8080
+----
+
+*[レスポンス]*
+[source, HTTP]
+----
+HTTP/1.1 200
+Content-Type: text/plain;charset=UTF-8
+Content-Length: 5
+
+Hello
+----
+
+``Accept-Language: XX``の場合、``src/main/resources/i18n``直下に``messages_XX.properties``を作成していない。 +
+そのため、``messages.properties``で設定した「Default Message」が返却される。
+
+*[リクエスト]*
+[source, HTTP]
+----
+GET / HTTP/1.1
+Accept-Language: XX
+Host: localhost:8080
+----
+
+*[レスポンス]*
+[source, HTTP]
+----
+HTTP/1.1 200
+Content-Type: text/plain;charset=UTF-8
+Content-Length: 15
+
+Default Message
+----
+
+``Accept-Language``を指定しない場合、アプリケーション(JVM)のLocaleが取得される。 +
+この例の場合は「``ja_JP``」が取得され、``messages_ja.properties``で設定した「こんにちは」が返却される。
+
+*[リクエスト]*
+[source, HTTP]
+----
+GET / HTTP/1.1
+Host: localhost:8080
+----
+
+*[レスポンス]*
+[source, HTTP]
+----
+HTTP/1.1 200
+Content-Type: text/plain;charset=UTF-8
+Content-Length: 15
+
+こんにちは
+----
+
+[[MessageManagement_HowToUse_Locale_Fixed]]
+==== Localeの固定化
+``spring.mvc.locale``でLocaleを固定することで、Accept-Languageを指定しても、固定したLocaleのメッセージプロパティファイルを読み込めることを確認する。 +
+「<<MessageManagement_HowToUse_Implementation_Locale>>」に追記する形で実装例を示す。 +
+``application.yml``に下記の設定を追記する。
+
+[source, YAML]
+.application.yml
+----
+spring:
+  mvc:
+    # (1)
+    locale: en
+    # (2)
+    locale-resolver: fixed
+----
+[cols="10,90",options="header"]
+.application.ymlの説明
+|===
+|項番
+|概要
+
+|(1)
+|アプリケーションのLocaleを``en``に設定する。
+
+|(2)
+|``spring.mvc.locale``で設定したLocaleを常に使用する。
+|===
+
+Accept-Languageを下記の2つで実行し、リクエストとレスポンスの例を示す。
+
+* 指定しない
+* ``Accept-Language: ja``
+
+``Accept-Language``を指定しない場合、``spring.mvc.locale``で指定した「``en``」を取得し、``messages_en.properties``で設定した「Hello」が返却される。
+
+*[リクエスト]*
+[source, HTTP]
+----
+GET / HTTP/1.1
+Host: localhost:8080
+----
+
+*[レスポンス]*
+[source, HTTP]
+----
+HTTP/1.1 200
+Content-Type: text/plain;charset=UTF-8
+Content-Length: 5
+
+Hello
+----
+
+``Accept-Language: ja``の場合でも、``spring.mvc.locale``で指定した「``en``」を取得し、``messages_en.properties``で設定した「Hello」が返却される。
+
+*[リクエスト]*
+[source, HTTP]
+----
+GET / HTTP/1.1
+Accept-Language: ja
+Host: localhost:8080
+----
+
+*[レスポンス]*
+[source, HTTP]
+----
+HTTP/1.1 200
+Content-Type: text/plain;charset=UTF-8
+Content-Length: 5
+
+Hello
+----
+
+[[MessageManagement_HowToTest]]
+== {test}
+メッセージ管理について、{SB}特有のテスト機能は提供されていないため、{GL}では割愛する。

@@ -1,0 +1,37 @@
+= Spring Boot Development Reference
+
+This document provides explanations and tutorials about Spring Boot, and aims to help readers understand the features and benefits of Spring Boot through actual application development.
+
+Therefore, it does not exhaustively explain the functions of Spring Boot. For functions and usage not described in this document, please refer to https://docs.spring.io/spring-boot/docs/2.2.0.RELEASE/reference/htmlsingle/[the official reference of Spring Boot].
+
+We hope that reading this document will facilitate the learning of Spring Boot technology and software development using Spring Boot.
+
+== Source files
+
+Source files of this reference are stored into following directories.
+
+* Japanese version : ``{repository root}/src/main/asciidoc/ja``
+
+== Source file format
+
+This reference is written by the Asciidoctor format(``.adoc``). About the Asciidoctor format, refer to the http://asciidoctor.org/docs/[Asciidoctor documentation contents].
+
+== How to build
+
+We build to HTML and PDF files using the https://github.com/asciidoctor/asciidoctor-maven-plugin[Asciidoctor Maven Plugin].
+
+=== Build HTML files
+
+Please execute the two mvn command. If build is successful, HTML files generate to the directory below.
+
+* HTML : ``{your repository}/target/generated-docs/html``
+
+[source,console]
+----
+  $ mvn -f image_pom.xml
+  $ mvn
+----
+
+== Terms of use
+
+Terms of use refer to ``src/main/asciidoc/ja/TermsOfUse.adoc``.

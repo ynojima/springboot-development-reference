@@ -1,0 +1,167 @@
+include::_include_all.adoc[]
+
+:toc:
+:sectnums: 4
+:toclevels: 6
+
+[[Transaction]]
+
+= トランザクション管理
+
+== {overview}
+
+{SF}はトランザクション管理の機構を持っており、
+``@Transactional``アノテーションを用いてトランザクション境界の設定が行える。
+ただし事前準備として、永続化フレームワークやJTAの有無に合わせたトランザクションマネージャを開発者がBean定義する必要があった。
+
+{SB}は、使用している永続化フレームワークのStarter・JTAの設定有無からトランザクションマネージャの実装クラスが自動で設定される。
+
+なお、{GL}は永続化フレームワークを対象にしたトランザクション管理の説明を行う。 +
+それ以外(JMSやNoSQLなど)を使用したトランザクション管理機能の説明は省略する。
+
+
+== {how_to_use}
+
+=== {starter_to_use}
+トランザクションマネージャ管理自体のStarterは存在しない。
+
+=== {enable_auto_configuration}
+
+使用する永続化フレームワークのStarterやJTAの設定などで有効になる{AC}に応じて、
+適切なトランザクションマネージャがBean定義される。
+
+.{enable_auto_configuration}
+[cols="6,70a", options="header"]
+|===
+|クラス名
+|概要
+
+|``org.springframework.boot.autoconfigure.`` +
+``transaction.jta.JtaAutoConfiguration``
+|JtaAutoConfigurationが有効になった場合に、JtaTransactionManagerがトランザクションマネジャーに設定される。
+
+|``org.springframework.boot.autoconfigure.`` +
+``orm.jpa.HibernateJpaAutoConfiguration``
+|{SPDJ}の{AC}が有効になった場合に、JpaTransactionManagerがトランザクションマネジャーに設定される。
+
+|``org.springframework.boot.autoconfigure.`` +
+``jdbc.DataSourceTransactionManagerAutoConfiguration``
+|トランザクションマネジャーが設定されていない場合は最終的に当該{AC}が有効になる。 +
+DataSourceTransactionManagerがトランザクションマネジャーに設定される。
+
+|``org.springframework.boot.autoconfigure.`` +
+``transaction.TransactionAutoConfiguration``
+|DIコンテナに管理されたトランザクションマネジャーに対し、TransactionTemplateの設定とAOPの設定を行う。
+
+
+|===
+
+=== {customization_points}
+
+==== {property_based_configuration}
+
+``spring.transaction.*``でトランザクション制御に関するカスタマイズが可能である。
+
+.代表的な設定値
+[cols="30a,20,40a", options="header"]
+|===
+|プロパティ名
+|デフォルト値
+|概要
+
+|``spring.transaction.default-timeout``
+|-
+|トランザクションのタイムアウト値を設定する。
+設定しない場合は、無制限となる。
+
+|``spring.transaction.rollback-on-commit-failure``
+|-
+|コミット処理時点で何らかのエラーが発生した場合ロールバックするかどうかを設定する。
+
+設定しない場合はロールバックしない状態で動作する。 +
+ロールバックしない状態だと、未確定状態のコネクションがコネクションプールに戻ってしまう可能性がある。 +
+この状態で、コネクションが使いまわされた場合、意図しないコミットのリスクがあるため、
+trueの設定を推奨する。
+
+|``spring.aop.proxy-target-class``
+|true
+|AOPの機能を使ってトランザクションの開始、終了をハンドリングする。 +
+デフォルトの場合、CGLIBの機能を使用してProxy化を行う。 +
+falseの場合はJDK Dynamic Proxyの機能を使用してProxy化を行う。
+
+|===
+
+==== {bean_based_configuration}
+Customizerが用意されており、Java実装ベースでカスタマイズが行える。 +
+下記インターフェースを継承したクラスでカスタマイズを実装し、Bean定義するだけで有効になる。
+
+[cols="10,20", options="header"]
+|===
+
+|インターフェース
+|説明
+
+|PlatformTransactionManagerCustomizer
+|PlatformTransactionManagerをカスタマイズする。
+
+|===
+
+=== {functional_how_to_use}
+``@Transactional``アノテーションを使用することでトランザクション境界を設定できる。
+
+.UserServiceImpl.java
+[source,java]
+----
+@Service
+@Transactional // (1)
+public class UserServiceImpl implements UserService {
+    // omitted
+}
+----
+
+[cols="6,70", options="header"]
+|===
+|番号
+|概要
+
+|(1)
+|``@Transactional``アノテーションを付与することで、トランザクション境界が設定される。
+
+|===
+
+また、``TransactionTemplate``も自動でBean定義されるため、プログラムによるトランザクション管理も可能である。
+
+.AppServiceImpl.java
+[source,java]
+----
+@Service
+public class AppServiceImpl implements AppService {
+
+    @Autowired //(1)
+    TransactionTemplate transactionTemplate;
+
+    public Object AppMethod(){
+        return transactionTemplate.execute( //(2)
+        // omitted
+        )
+    }
+}
+----
+
+[cols="6,70", options="header"]
+|===
+|番号
+|概要
+
+|(1)
+|``@Autowired``アノテーションで、{SB}で用意されたTransactionTemplateをインジェクションする。
+
+|(2)
+|executeメソッドを使用してプログラムによるトランザクション管理を行う。 +
+プログラムによるトランザクション管理の詳細は、
+https://docs.spring.io/spring/docs/current/spring-framework-reference/data-access.html#transaction-programmatic[{SF}の公式リファレンス]を参照すること。
+
+|===
+
+== {test}
+トランザクション管理について、{SB}特有のテスト機能は提供されていないため、{GL}では割愛する。

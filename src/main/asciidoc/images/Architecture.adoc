@@ -1,0 +1,4 @@
+= Image of Architecture
+== Images
+
+plantuml::Architecture/Architecture_SpringInitializr_Project_Structure.pu[]

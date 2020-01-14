@@ -1,0 +1,18 @@
+@startsalt
+{
+{T
+<application-root>
++ <&folder> src
+++ <&folder> main
++++ <&folder> resources
+++++ <&file> schema.sql (1)
+++++ <&file> data.sql (1)
+++++ <&file> schema-it.sql (2)
+++++ <&file> data-it.sql (2)
+++++ <&file> schema-unittest.sql (3)
+++++ <&file> data-unittest.sql (3)
+++++ <&file> schema-local.sql (4)
+++++ <&file> data-local.sql (4)
+}
+}
+@endsalt

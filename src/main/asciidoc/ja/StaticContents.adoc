@@ -1,0 +1,208 @@
+include::_include_all.adoc[]
+
+:sectnums: 4
+
+[[StaticContents]]
+= 静的ファイル
+
+[[StaticContents_OutLine]]
+== {overview}
+
+従来の{SF}では、静的ファイルへのアクセスはAPサーバの機能や{SM}の``RequestHandler``など複数の方法を利用して行っていた。 +
+{SB}では、{SM}の機能である``DispatherServlet``に設定された``ResourceHttpRequestHandler``経由でクラスパス上の静的ファイルを取り扱う。 +
+静的ファイルは所定のディレクトリに配置される必要があり、デフォルトでは<<StaticContents_HowToUse_CustomizePoint_Property>>に示されるように、複数のディレクトリが設定されている。 +
+
+[[StaticContents_HowToUse]]
+== {how_to_use}
+[[StaticContents_HowToUse_Starter]]
+=== {starter_to_use}
+静的ファイルが使用できるようにするため、下記に示すStarterをpom.xmlに追加する。
+
+* {SBSW}
+
+[[StaticContents_HowToUse_AutoConfiguration]]
+=== {enable_auto_configuration}
+{SBSW}のStarterで有効になる{AC}の中で、静的ファイルの取り扱いに重要なものを下記に示す。
+
+[cols="20,80", options="header"]
+.{enable_auto_configuration}
+|===
+|クラス名
+|概要
+
+|``org.springframework.boot.autoconfigure.`` +
+``web.servlet.WebMvcAutoConfiguration``
+|MVCレイヤの設定を行う。
+
+|``org.springframework.boot.autoconfigure.`` +
+``web.servlet.WebMvcProperties``
+|``spring.mvc.*``で設定されるプロパティの値を保持する。
+
+|``org.springframework.boot.autoconfigure.`` +
+``web.ResourceProperties``
+|``spring.resources.*``で設定されるプロパティの値を保持する。
+|===
+
+[[StaticContents_HowToUse_CustomizePoint]]
+=== {customization_points}
+[[StaticContents_HowToUse_CustomizePoint_Property]]
+==== {property_based_configuration}
+主に``spring.resource.* `` もしくは ``spring.mvc.* ``に用意されているプロパティでカスタマイズが可能。 +
+代表的なプロパティを下記に示す。 +
+
+[cols="20,10,70",options="header"]
+.代表的な設定値
+|===
+|プロパティ名
+|デフォルト値
+|概要
+
+|``spring.resources.static-locations``
+|classpath:/META-INF/resources/ +
+classpath:/resources/ +
+classpath:/static/ +
+classpath:/public/
+|静的ファイルが配置可能なディレクトリの設定ができる。 +
+左記のように複数ディレクトリを設定した場合は、先頭から順に走査を行い、最初に取得した静的ファイルを返す。
+
+|``spring.resources.cache.*``
+|-
+|静的ファイルのキャッシュに関する設定ができる。 +
+設定項目は多岐にわたるため、詳細は https://docs.spring.io/spring-boot/docs/2.2.0.RC1/reference/html/appendix-application-properties.html#web-properties[公式リファレンス]を参照すること。
+
+|``spring.mvc.static-path-pattern``
+|/**
+|静的ファイルへのアクセスが可能なパスパターンを設定できる。
+|===
+
+[IMPORTANT]
+``spring.resources.static-locations``プロパティに設定した値は、デフォルトの設定に追加するのではなく上書きするため、デフォルトのディレクトリにはアクセスできなくなる。
+
+[[StaticContents_HowToUse_CustomizePoint_JavaConfig]]
+==== {bean_based_configuration}
+<<SpringMVC.adoc#SpringMVC_HowToUse_CustomizePoint_Configurer,SpringMVC>>でも説明したように、``WebMvcConfigurer``の実装クラスをBean定義することで、静的ファイルの取り扱いについてもカスタマイズすることができる。 +
+代表的なメソッドを下記に示す。 +
+
+[cols="20,70",options="header"]
+.代表的なメソッド
+|===
+|メソッド名
+|概要
+
+|addResourceHandlers
+|``ResourceHandler``を登録し、URIと静的ファイルのディレクトリをマッピングする。
+|===
+[[StaticContents_HowToUse_Implementation]]
+=== {functional_how_to_use}
+
+[[StaticContents_HowToUse_Implementation_html]]
+==== ディレクトリに配置された静的ファイルへのアクセス
+``classpath:/static/``に配置されたhtmlファイルおよびCSSファイルへアクセスすることができることを確認する。 +
+下記のhtmlファイルをディレクトリ``/static``直下に配置する。 +
+
+[[Implementation_Hello.html]]
+[source,html]
+.hello.html
+----
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="UTF-8">
+        <link rel="stylesheet" href="css/hello.css" />
+        <title>Hello SpringMVC</title>
+    </head>
+    <body>
+        <p>Hello SpringMVC</p>
+    </body>
+</html>
+----
+
+また、``/static``ディレクトリに``/css``ディレクトリを作成し、下記のcssファイルを配置する。
+
+[source,css]
+.hello.css
+----
+body {
+    background-color: red;
+}
+----
+
+この状態で``/hello.html``にアクセスすると、``hello.css``が適用された``hello.html``が返却されることが確認できる。 +
+{SB}では、上記したように、特定のディレクトリに対して渡されたパスを元に走査を行い、静的ファイルを取得する。 +
+そのため、``hello.html``で指定されたcssファイルは``/css/hello.css``でディレクトリを走査し、``/static``配下にあるファイルを取得することができる。 +
+
+
+[[StaticContents_HowToUse_Implementation_WebJars]]
+==== WebJarsとの連携
+JavaScriptやCSSなどのクライアントサイドのライブラリの依存関係をMavenで管理できるようにした``WebJars``との連携方法を示す。 +
+{SM}では、``WebMvcAutoconfiguration``によって自動的にWebJarsのハンドラが登録されるため、依存関係にWebJarsを含めるだけで利用可能になる。 +
+ +
+今項ではBootstrapを追加し連携する方法を示す。 +
+まず、Bootstrapを使用するためにpom.xmlに下記の記述を追加する。 +
+
+[source,xml]
+.pom.xml
+----
+<dependency>
+    <groupId>org.webjars</groupId>
+    <artifactId>bootstrap</artifactId>
+    <version>4.3.1</version>
+</dependency>
+----
+
+この状態で、``/webjars/*``配下に各種ファイルが格納される。 +
+<<Implementation_Hello.html,hello.html>>を下記のようにカスタマイズし、WebJarsとの連携ができていることを確認する。 +
+[[Implementation_Custome_Hello.html]]
+[source,html]
+.hello.html
+----
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="UTF-8">
+        <link rel="stylesheet" href="webjars/bootstrap/4.3.1/css/bootstrap.min.css" />
+        <script src="webjars/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+        <title>Hello SpringMVC</title>
+    </head>
+    <body>
+        <p>Hello SpringMVC</p>
+    </body>
+</html>
+----
+
+上記の例ではView側でBootstrapのバージョンを指定している。 +
+バージョンを変更する場合、指定した部分をすべて書き換えなければならないなど問題がある。 +
+そこで、WebJarsのバージョン情報を隠ぺいして取り扱うようにする例を下記に示す。 +
+まず、webjars-locatorをpom.xmlに追加する。
+[source,xml]
+.pom.xml
+----
+<dependency>
+    <groupId>org.webjars</groupId>
+    <artifactId>webjars-locator</artifactId>
+    <version>0.37</version>
+</dependency>
+----
+
+<<Implementation_Custome_Hello.html,hello.html>>を下記のように修正してもBootstrapが有効であることがわかる。
+[[Implementation_Custome_Hide_Hello.html]]
+[source,html]
+.hello.html
+----
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="UTF-8">
+        <link rel="stylesheet" href="webjars/bootstrap/css/bootstrap.min.css" />
+        <script src="webjars/bootstrap/js/bootstrap.min.js"></script>
+        <title>Hello SpringMVC</title>
+    </head>
+    <body>
+        <p>Hello SpringMVC</p>
+    </body>
+</html>
+----
+
+[[StaticContents_HowToTest]]
+== {test}
+静的ファイルについて、{SB}特有のテスト機能は提供されていないため、{GL}では割愛する。

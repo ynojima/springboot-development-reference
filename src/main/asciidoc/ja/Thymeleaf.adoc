@@ -1,0 +1,204 @@
+include::_include_all.adoc[]
+[[Thymeleaf]]
+:sectnums: 4
+:toclevels: 6
+
+= {TH}
+
+[[Thymeleaf_Functional_Overview]]
+== {overview}
+{TH}は{sb}と親和性の高い、HTML生成用のテンプレートエンジンである。 +
+テンプレートエンジンは、テンプレートと呼ばれるひな形と、入力データを組み合わせて成果ドキュメントを生成する機能である。
+{TH}で用いられるテンプレートファイルはHTMLの文法で記述可能であり、テンプレート自体をWebブラウザで描画することができる。 +
+ +
+{TH}は{SB}が生成する``ViewResolver``を経由して取得したテンプレートファイルに対し、変数の埋め込みやテンプレートファイルの解釈を行い、HTMLを生成しViewとして返す。 +
+``ViewResolver``を含め初期設定は``ThymeleafAutoConfiguration``および関連する{AC}によって自動的に設定される。 +
+ +
+使用するテンプレートファイルはクラスパス上の``/templates``配下に配置することで認識される。 +
+また、``/templates``配下に``/error``フォルダを作成し、そこに``ステータスコード.html``や``error.html``の名称でテンプレートファイルを配置すると、対応する例外発生時は配置されたテンプレートファイルを自動的に返却する。 +
+
+
+[[Thymeleaf_How_to_use]]
+== {how_to_use}
+
+[[Thymeleaf_Starters]]
+=== {starter_to_use}
+{TH}の機能を使用するために下記のStarterをpom.xmlを追加する。 +
+
+* {SBSW}
+* {SBS}-thymeleaf
+
+[CAUTION]
+{SBS}-thymeleafのみをdependencyに追加しただけでは{SBSW}は追加されないため、必ず一緒に追加すること。
+
+
+[[Thymeleaf_Enable_AutoConfigurations]]
+=== {enable_auto_configuration}
+上記のStarterを追加することで、下記の{AC}が有効になる。
+
+[[Thymeleaf_Enable_AutoConfiguration_Table]]
+[cols="20,80", options="header"]
+.{enable_auto_configuration}
+|===
+|クラス名
+|概要
+
+|``org.springframework.boot.autoconfigure.`` +
+``web.servlet.WebMvcAutoConfiguration``
+|{SM}における各HandlerやResoleverなどの生成、Bean定義を行う。
+
+|``org.springframework.boot.autoconfigure.`` +
+``web.servlet.DispatcherServletAutoConfiguration``
+|{SM}で利用される``{DS}``の生成、Bean定義を行う。
+
+|``org.springframework.boot.autoconfigure.`` +
+``thymeleaf.ThymeleafAutoConfiguration``
+|{TH}のTemplateEngineやThymeleafViewResolverの生成、Bean定義を行う。 +
+ThymeleafViewResolverが<<Thymeleaf_Functional_Overview>>で言及したテンプレートファイルの取得を行い、TemplateEngineで解釈を行う。
+
+|``org.springframework.boot.autoconfigure.`` +
+``thymeleaf.ThymeleafProperties``
+|``spring.thymeleaf.*``で設定した設定値がセットされるプロパティクラス。
+
+|===
+
+[[Thymeleaf_Customize_Points]]
+=== {customization_points}
+
+[[Thymeleaf_Property_Based_Configurations]]
+==== {property_based_configuration}
+``spring.thymeleaf.*``以下に用意されているプロパティに対して、値を設定することで{TH}の挙動をカスタマイズすることができる。 +
+設定可能なプロパティの代表例を下記に示す。 +
+
+[[Thymeleaf_Properties]]
+[cols="20,10,70", options="header"]
+.代表的な設定値
+|===
+|プロパティ名
+|デフォルト値
+|概要
+
+|``spring.thymeleaf.cache``
+|true
+|パースしたテンプレートファイルのキャッシュの有効/無効を設定する。 +
+有効になっている場合、一度パースされたテンプレートファイルはView名をKeyとして``CacheManager``によりキャッシュされる。 +
+再度同じView名にアクセスがあった場合、キャッシュからパースされたテンプレートが読み込まれる。この時キャッシュにヒットしない場合はテンプレートをパースしてキャッシュに追加する。
+
+|``spring.thymeleaf.prefix``
+|classpath:/templates/
+|テンプレートファイルを走査するディレクトリ。
+
+|``spring.thymeleaf.suffix``
+|.html
+|テンプレートファイルを走査するView名に付与するサフィックス。
+|===
+
+[[Thymeleaf_Implementation]]
+=== {functional_how_to_use}
+名前と年齢を描画して返す場合の実装例を示す。 +
+まず、名前と年齢を保持するPersonクラスを作成する。 +
+なお、lombokを利用してgetter/setterを排除している。
+
+[source,java]
+.Person.java
+----
+@Data
+public class Person {
+
+    private String name;
+
+    private Integer age;
+}
+----
+
+出力するテンプレートファイルのoutput.htmlを作成する。
+[source,html]
+.output.html
+----
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+    <head>
+        <meta charset="UTF-8" />
+        <title>output</title>
+    </head>
+    <body>
+        <!-- (1) -->
+        <div th:object="${person}">
+            <!-- (2) -->
+            <p>name:<span th:text="*{name}"></span></p>
+            <!-- (3) -->
+            <p>age:<span th:text="*{age}"></span></p>
+        </div>
+    </body>
+</html>
+----
+[cols="10,90",options="header"]
+|===
+|項番
+|概要
+
+|(1)
+|Pesonオブジェクトへアクセスする。
+
+|(2)
+|Personオブジェクトのnameフィールドの値を取得する。
+
+|(3)
+|Personオブジェクトのageフィールドの値を取得する。
+|===
+最後にControllerを実装する。
+[source,java]
+.ThymeleafController.java
+----
+@Controller
+@RequestMapping("thymeleaf")
+public class ThymeleafController {
+
+    @PostMapping("output")
+    public String validForm(Model model) {
+        Person person = new Person()
+        person.setName("test");
+        person.setAge(30);
+        model.addAttribute(person); //(1)
+        return "output";
+    }
+}
+----
+[cols="10,90",options="header"]
+|===
+|項番
+|概要
+
+|(1)
+|Personオブジェクトをセットする。
+
+|===
+
+最終的に、レンダリングされ、Viewとして返されるhtmlは下記のようになる。 +
+
+[source,html]
+.最終的に表示されるhtml
+----
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>output</title>
+    </head>
+    <body>
+        <div>
+            <p>name:<span>test</span></p>
+            <p>age:<span>30</span></p>
+        </div>
+    </body>
+</html>
+----
+
+上記実装例以外に、例外ハンドリングや、WebJarsなどの静的ファイルとの連携については、下記の章で説明を行っている。 +
+
+* <<ErrorHandling.adoc#ErrorHandling, 例外ハンドリング>>
+* <<StaticContents.adoc#StaticContents, 静的ファイル>>
+
+[[Thymeleaf_HowToTest]]
+== {test}
+{TH}について、{SB}特有のテスト機能は提供されていないため、{GL}では割愛する。

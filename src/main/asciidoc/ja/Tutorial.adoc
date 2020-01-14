@@ -1,0 +1,2425 @@
+include::_include_all.adoc[]
+
+:sectnums: 5
+
+[[Tutorial]]
+= チュートリアル
+
+[[Introduction]]
+== はじめに
+
+本チュートリアルは、基本的なRESTful Webサービスの開発を体験することで、<<Goal>>に記載する知識を習得することを目的としている。
+
+[[Goal]]
+=== このチュートリアルで学ぶこと
+* {SB}による基本的なRESTful Webサービスの構築方法
+* {SB}によるJUnitを使用した基本的なテストの開発方法
+* MavenおよびSTS(Eclipse)プロジェクトの構築方法
+
+[[Verification_Environments]]
+=== 検証環境
+本チュートリアルは下記の環境で動作確認をしている。
+
+REST API Clientとして、Web BrowserであるGoogle Chromeの拡張機能(Talend API Tester - Free Edition)を使用するため、Google Chromeをインストールする。 +
+コマンド実行については、Unix系ターミナルとしてGit Bashを利用している。Windowsのコマンドプロンプトで使用することも可能である。
+
+[cols="2,8", options="header"]
+.検証環境
+|===
+|種別
+|プロダクト
+
+|Web Browser
+|https://www.google.com/intl/ja_jp/chrome/[Google Chrome]バージョン: 78.0.3904.108（Official Build）（64 ビット）
+
+|REST API Client
+|https://chrome.google.com/webstore/detail/restlet-client-rest-api-t/aejoelaoggembcahagimdiliamlcdmfm[Talend API Tester - Free Edition] Winter'20 - R1910
+
+|Unix系ターミナル
+|https://gitforwindows.org/[Git for Windows] Version 2.22.0
+
+|上記以外のプロダクト
+|<<Introduction.adoc#Intro_TestedEnvironments, 検証環境>>と同様。 +
+<<Introduction.adoc#Intro_TestedEnvironments, 検証環境>>で記載したソフトウェアは既にインストール済みとして説明を行う。
+|===
+
+[[Explanation]]
+== 作成するREST APIの説明
+
+[[Overview]]
+=== APIの概要
+本チュートリアルでは、Todoを管理するREST APIを作成する。Todoの取得、登録、完了、削除が行える。 +
+以降、Todoを表す情報を「Todoリソース」と呼ぶ。
+
+[[Business_Requirements]]
+=== APIの業務要件
+APIの業務要件は下記のとおりとする。
+
+[cols="20,80", options="header"]
+.APIの業務要件一覧
+|===
+|ルールID
+|説明
+
+|B01
+|未完了のTodoは5件までしか登録できない。
+
+|B02
+|完了済みのTodoは完了できない。
+|===
+
+[[Processing_Specifications]]
+=== APIの処理仕様
+APIの処理仕様は下記のとおりとする。
+
+[cols="20,15,15,20,30", options="header"]
+.APIの処理仕様一覧
+|===
+|API名
+|HTTPメソッド
+|パス
+|{HSC}
+|説明
+
+|GET Todos
+|GET
+|/todos
+|200(OK)
+|Todoリソースを全件取得する。
+
+|POST Todo
+|POST
+|/todos
+|201(Created)
+|Todoリソースを新規作成する。
+
+|GET Todo
+|GET
+|/todos/{todoId}
+|200(OK)
+|Todoリソースを一件取得する。
+
+|PUT Todo
+|PUT
+|/todos/{todoId}
+|200(OK)
+|Todoリソースを完了状態に更新する。
+
+|DELETE Todo
+|DELETE
+|/todos/{todoId}
+|204(No Content)
+|Todoリソースを一件削除する。
+|===
+
+[[GetTodos_Details]]
+==== GET Todos
+
+* Todoリソースを全件取得する。
+* {HSC}``200``(OK)と作成済みTodoリソースのリスト(JSON形式)を返却する。
+
+*[リクエスト]*
+[source, HTTP]
+----
+GET /todos HTTP/1.1
+Host: localhost:8080
+----
+
+*[レスポンス]*
+[source, HTTP]
+----
+HTTP/1.1 200
+Content-Type: application/json
+Transfer-Encoding: chunked
+Date: Tue, 08 Oct 2019 01:29:35 GMT
+
+[{"todoId":1,"todoTitle":"sample todo 1","finished":false,"createdAt":"2019/09/19 01:01:01"},{"todoId":2,"todoTitle":"sample todo 2","finished":false,"createdAt":"2019/09/19 02:02:02"}]
+----
+
+[[PostTodo_Details]]
+==== POST Todo
+
+* Todoリソースを新規作成する。
+* Todoリソースのタイトルが1文字以上30文字以下であること。
+* タイトルが1文字以上30文字以下を満たさない場合、{HSC}``400``(Bad Request)でバリデーション例外をスローする。
+* <<Business_Requirements>>のB01を満たさない場合、{HSC}``409``(Conflict)でビジネス例外をスローする。
+* 処理が成功した場合、{HSC}``201``(Created)と作成したTodoリソース(JSON形式)を返却する。
+
+*[リクエスト]*
+[source, HTTP]
+----
+POST /todos HTTP/1.1
+Content-Length: 38
+Host: localhost:8080
+Content-Type: application/json
+
+{
+  "todoTitle": "sample todo 3"
+}
+----
+
+*[レスポンス]*
+[source, HTTP]
+----
+HTTP/1.1 201
+Content-Type: application/json
+Transfer-Encoding: chunked
+Date: Tue, 08 Oct 2019 01:29:03 GMT
+
+{"todoId":3,"todoTitle":"sample todo 3","finished":false,"createdAt":"2019/10/08 10:29:03"}
+----
+
+[[GetTodo_Details]]
+==== GET Todo
+
+* パス変数「``todoId``」に一致するTodoリソースを一件取得する。
+* 該当する「``todoId``」が存在しない場合、{HSC}``404``(Not Found)でリソース未検出例外をスローする。
+* {HSC}``200``(OK)と作成済みのTodoリソース(JSON形式)を返却する。
+
+*[リクエスト]*
+[source, HTTP]
+----
+GET /todos/1 HTTP/1.1
+Host: localhost:8080
+----
+
+*[レスポンス]*
+[source, HTTP]
+----
+HTTP/1.1 200
+date: Tue, 08 Oct 2019 01:29:50 GMT
+transfer-encoding: chunked
+content-type: application/json
+
+{"todoId":1,"todoTitle":"sample todo 1","finished":false,"createdAt":"2019/09/19 01:01:01"}
+----
+
+[[PutTodo_Details]]
+==== PUT Todo
+
+* パス変数「``todoId``」に一致するTodoリソースを完了状態に更新する。
+* 該当する「``todoId``」が存在しない場合、{HSC}``404``(Not Found)でリソース未検出例外をスローする。
+* <<Business_Requirements>>のB02を満たさない場合、{HSC}``409``(Conflict)でビジネス例外をスローする。
+* 処理が成功した場合、{HSC}``200``(OK)と完了状態のTodoリソース(JSON形式)を返却する。
+
+*[リクエスト]*
+[source, HTTP]
+----
+PUT /todos/1 HTTP/1.1
+Content-Length: 38
+Host: localhost:8080
+Content-Type: application/json
+
+----
+
+*[レスポンス]*
+[source, HTTP]
+----
+HTTP/1.1 200
+Content-Type: application/json
+Transfer-Encoding: chunked
+Date: Tue, 08 Oct 2019 01:30:21 GMT
+
+{"todoId":1,"todoTitle":"sample todo 1","finished":true,"createdAt":"2019/09/19 01:01:01"}
+----
+
+[[DeleteTodo_Details]]
+==== DELETE Todo
+
+* パス変数「``todoId``」に一致するTodoリソースを一件削除する。
+* 該当する「``todoId``」が存在しない場合、{HSC}``404``(Not Found)でリソース未検出例外をスローする。
+* 処理が成功した場合、{HSC}``204``(No Content)を返却する。
+
+*[リクエスト]*
+[source, HTTP]
+----
+DELETE /todos/2 HTTP/1.1
+Host: localhost:8080
+----
+
+*[レスポンス]*
+[source, HTTP]
+----
+HTTP/1.1 204
+Date: Tue, 08 Oct 2019 01:47:47 GMT
+----
+
+[[Error_Response]]
+==== エラー応答
+
+REST APIでエラーが発生した場合、JSON形式でエラー内容を返却する。 +
+下記に代表的なエラー応答について記載する。 +
+下記以外のエラー応答もあるが、本チュートリアルでは説明を割愛する。
+
+[cols="10,15,15,30,30", options="header"]
+.代表的なエラー応答
+|===
+|項番
+|エラー種別
+|{HSC}
+|エラーメッセージ
+|説明
+
+|1
+.2+|ビジネスエラー
+.2+|409(Conflict)
+|The count of un-finished Todo must not be over [未完了Todoの上限値].
+|未完了のTodoが上限を超えた場合に設定される。
+
+|2
+|The requested Todo is already finished. (id=[todoId])
+|要求されたTodoがすでに完了済みであった場合に設定される。
+
+|3
+|リソース未検出エラー
+|404(Not Found)
+|The requested Todo is not found. (id=[todoId])
+|要求されたTodoが存在しない場合に設定される。
+
+|4
+.2+|バリデーションエラー
+.2+|400(Bad Request)
+|must not be empty
+|入力されたタイトルが1文字未満であった場合に設定される。
+
+|5
+|size must be between [タイトルの下限値] and [タイトルの上限値].
+|入力されたタイトルの文字数が設定した範囲を超えた場合に設定される。
+|===
+
+[[Environment_Construction]]
+== 環境構築
+
+下記の流れでチュートリアルを実施するための環境構築を行う。 +
+
+. <<Lombok_Setup>>
+. <<Create_Project>>
+. <<Import_Project>>
+. <<REST_API_Client>>
+
+[[Lombok_Setup]]
+=== Lombokのセットアップ
+
+Lombokは、Java言語における言語仕様上省くことができない定型的なコード(ボイラープレートコード)をソースコードから排除するために使用するライブラリである。 +
+Lombokはボイラープレートコードをコンパイル時に生成することで、開発者が実装するソースコード上から冗長なコードを取り除く仕組みを提供している。
+
+[[Lombok_Setupide]]
+==== IDE連携
+
+LombokをSTS上で使用する場合は、STSが提供するコンパイル(ビルド)機能と連携するために、 LombokをSTSにインストールする必要がある。 +
+本チュートリアルでは、STSにインストールする方法を紹介する。
+
+[[Lombok_Download]]
+==== Lombokのダウンロード
+
+LombokのJarファイルをダウンロードする。 +
+LombokのJarファイルは、下記から取得する。
+
+* https://projectlombok.org/download[Lombokのダウンロードページ]
+* Mavenのローカルリポジトリ(通常は、``$HOME/.m2/repository/org/projectlombok/lombok/<version>/lombok-<version>.jar``)
+
+[[Lombok_Install]]
+==== Lombokのインストール
+
+ダウンロードしたLombokのJarファイルを実行(ダブルクリック)し、インストーラを立ち上げる。
+
+image::Tutorial/LombokInstaller.png[Lombokのインストーラー]
+
+インストール対象のSTSを選択後、”Install / Update” ボタンを押下してインストールを実行する。インストール候補のSTSは、インストーラによって自動検出される仕組みになっているが、 自動で検出されない場合は、”Specify location …”を押下してIDEを指定する必要がある。
+
+image::Tutorial/LombokInstallSuccessful.png[インストール成功時のダイアログ]
+
+Lombokをインストールした後にSTSを起動(又は再起動)すると、STS上でLombokを使用して開発できる。
+
+[[Create_Project]]
+=== プロジェクトの作成
+{SB}のプロジェクトを作成する方法は複数あるが、ここでは https://start.spring.io/[{SI}]を使用してプロジェクトを作成する。 +
+{SI}とは、パッケージ構成、依存ライブラリ、プラグインなどの設定を行った{SB}のプロジェクトを生成することができるWebサービスである。
+{SI}を使用することで、従来の{SF}を用いたアプリケーション開発で必要だった煩雑で難しい設定が不要となる。 +
+
+本チュートリアルでは、簡単にアプリケーション開発が開始できることを体験するために、{SI}を使用する。 +
+{SI}以外のプロジェクト作成方法については、 {si_reference_url}[{SI}の公式リファレンス] を参照すること。
+
+https://start.spring.io/[{SI}] にアクセスし、下記の値を選択/入力する。
+
+なお、本チュートリアルではO/R Mapperとして{mybatis}を使用する。
+
+[cols="15a,15a,15a,55a", options="header"]
+.プロジェクト作成時に設定する値
+|===
+3+h|項目名
+|設定値
+
+3+|Project
+|Maven Project
+
+3+|Language
+|Java
+
+3+|{SB}
+|2.2.0
+
+.7+|Project Metadata
+2+|Group
+|com.example
+
+2+|Artifact
+|tutorial
+
+.5+|Options
+|Name
+|tutorial
+
+|Description
+|tutorial application for development reference
+
+|Package Name
+|com.example.tutorial
+
+|Packaging
+|Jar
+
+|Java
+|11
+
+3+|Dependencies
+|
+* Spring Web
+* Lombok
+* H2 Database
+* MyBatis Framework
+|===
+
+[WARNING]
+.{SB}のバージョンについて
+====
+{SB}のバージョンは、リリース済みの最新バージョンを選択することを推奨する。
+====
+
+image::Tutorial/SpringInitializr.png[{SI}]
+
+値が正確に選択/入力されていることを確認し、"Generate-Ctrl+⏎"ボタンを押下する。 +
+作成したプロジェクトがzip形式でダウンロードされるため、展開して作業を行うディレクトリに移動する。
+
+本チュートリアルでは、ダウンロードしたzip形式のプロジェクトを下記に展開する。
+[source, console]
+.展開先ディレクトリ(Windowsの場合)
+----
+C:\xxx
+----
+[source, console]
+.展開先ディレクトリ(Unix系の場合)
+----
+/C/xxx
+----
+
+[WARNING]
+.{SI}のUIについて
+====
+https://start.spring.io/[{SI}] のUIが上記のキャプチャと異なる場合は、上段のプロジェクト作成時に設定する値に従って設定すること。
+====
+
+[NOTE]
+.開発補助モジュールについて
+====
+{SB} DevToolsは、開発中に資材を更新した際にアプリケーションを自動で再起動させることなどが可能なアプリケーション開発をスムーズに進めるための機能である。 +
+{SB} DevToolsの詳細は {reference_url}#using-boot-devtools[公式リファレンス] を参照すること。 +
+なお本チュートリアルでは、{SB} DevToolsは使用しない。
+====
+
+アプリケーションを実行し、プロジェクトが正しく作成できたことを確認する。
+
+.{SB}アプリケーションの実行(Unix系ターミナル)
+[source, console]
+----
+$ cd /C/xxx/tutorial
+$ mvn spring-boot:run
+----
+
+.{SB}アプリケーションの実行(Windowsコマンドプロンプト)
+[source, console]
+----
+C:> cd C:\xxx\tutorial
+C:\xxx\tutorial> mvn spring-boot:run
+----
+
+
+[NOTE]
+.プロキシサーバの経由について
+====
+インターネット接続するためにプロキシサーバを経由する必要がある場合、STSのProxy設定と http://maven.apache.org/guides/mini/guide-proxies.html[MavenのProxy設定]をする。
+====
+
+以下のとおり、mvnコマンドに対して{SB}のバナーと``Started TutorialApplication``というメッセージが表示されることを確認する。 +
+アプリケーションは``Ctrl + c``で停止できる。
+
+.出力例
+[source, console]
+----
+$ mvn spring-boot:run
+
+(.. omitted)
+
+.   ____          _            __ _ _
+/\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+\\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+'  |____| .__|_| |_|_| |_\__, | / / / /
+=========|_|==============|___/=/_/_/_/
+:: Spring Boot ::        (v2.2.0.RELEASE)
+
+2019-11-06 19:26:57.347  INFO 19656 --- [           main] c.example.tutorial.TutorialApplication   : Starting TutorialApplication on *** with PID 19656 (C:\xxx\tutorial\target\classes started by *** in C:\xxx\tutorial)
+2019-11-06 19:26:57.362  INFO 19656 --- [           main] c.example.tutorial.TutorialApplication   : No active profile set, falling back to default profiles: default
+2019-11-06 19:26:57.894  WARN 19656 --- [           main] o.m.s.mapper.ClassPathMapperScanner      : No MyBatis mapper was found in '[com.example.tutorial]' package. Please check your configuration.
+2019-11-06 19:26:58.243  INFO 19656 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port(s): 8080 (http)
+2019-11-06 19:26:58.259  INFO 19656 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2019-11-06 19:26:58.259  INFO 19656 --- [           main] org.apache.catalina.core.StandardEngine  : Starting Servlet engine: [Apache Tomcat/9.0.27]
+2019-11-06 19:26:58.353  INFO 19656 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2019-11-06 19:26:58.353  INFO 19656 --- [           main] o.s.web.context.ContextLoader            : Root WebApplicationContext: initialization completed in 944 ms
+2019-11-06 19:26:58.486  INFO 19656 --- [           main] o.s.s.concurrent.ThreadPoolTaskExecutor  : Initializing ExecutorService 'applicationTaskExecutor'
+2019-11-06 19:26:58.752  INFO 19656 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port(s): 8080 (http) with context path ''
+2019-11-06 19:26:58.752  INFO 19656 --- [           main] c.example.tutorial.TutorialApplication   : Started TutorialApplication in 1.753 seconds (JVM running for 2.145)
+----
+
+[CAUTION]
+.Tomcatがデフォルトで使用するポート番号8080を使用済みの場合
+====
+Tomcatがデフォルトで使用するポート番号8080を他のツール等で使用済みの場合、以下のエラーメッセージが出力され、アプリケーション起動に失敗する。
+
+.エラーメッセージ
+[source, console]
+----
+ConnectorStartFailedException: Connector configured to listen on port 8080 failed to start
+----
+
+そのような場合は以下のようにプロパティを設定することでTomcatが使用するポート番号を変更できる。
+
+[source,properties]
+.src/main/resources/application.properties
+----
+server.port=8088
+----
+====
+
+[[Import_Project]]
+=== プロジェクトのインポート
+
+作成したプロジェクトをSTSへインポートする。 +
+STSのメニューから、[File] -> [Import] -> [Maven] -> [Existing Maven Projects] -> [Next]を選択し、<<Create_Project>>で作成したプロジェクトを選択する。
+
+image::Tutorial/ImportMavenProjects.png[Import Existing Maven Projects]
+
+Root Directoryに``C:\xxx\tutorial``を設定し、Projectsにcom.example.tutorialのpom.xmlが選択された状態で、 [Finish]を押下する。
+
+image::Tutorial/Import.png[Select Maven Projects]
+
+インポートが完了すると、Package Explorerに次のようなプロジェクトが表示される。
+
+image::Tutorial/PackageExplorer.png[Package Explorer]
+
+[NOTE]
+.インポート後にビルドエラーが発生する場合
+====
+インポート後にビルドエラーが発生する場合は、プロジェクト名を右クリックし、「Maven」->「Update Project...」をクリックし、 「OK」ボタンをクリックすることでエラーが解消されるケースがある。
+====
+
+[TIP]
+.パッケージの表示形式の設定
+====
+パッケージの表示形式は、デフォルトは「Flat」だが、「Hierarchical」にしたほうが見通しがよい。 +
+Package Explorerの「View Menu」 (右端の下矢印)をクリックし、「Package Presentation」->「Hierarchical」を選択する。
+====
+
+[[REST_API_Client]]
+=== REST API Clientの準備
+本チュートリアルでは、REST API Clientとして、Google Chromeの拡張機能である「Talend API Tester - Free Edition」を使用する。 +
+「Talend API Tester - Free Edition」は、GUI操作で作成したアプリケーションの動作検証が簡単にできる。 +
+
+インストール方法として、Google Chrome ウェブストアの検索フォームに「Talend API Tester - Free Edition」を入力して検索し、「Talend API Tester - Free Edition」をGoogle Chromeに追加する。 +
+「Talend API Tester - Free Edition」を起動し、以下の画面が表示されればインストール完了となる。 +
+
+image::Tutorial/RestletClient.png[Talend API Tester]
+
+[WARNING]
+.Talend API Tester - Free EditionのUIについて
+====
+「Talend API Tester - Free Edition」のUIがバージョンにより上記のキャプチャと異なる場合がある。その場合は適宜読み替えること。
+====
+
+以上でチュートリアルの環境構築は完了である。
+
+[[Create_Tutorial_App]]
+== REST APIの作成
+本チュートリアルで作成するTodoリソースを管理するREST APIは、実際の開発の流れを意識してコンポーネント -> テストの順で実装する。 +
+以下の流れでTodoリソースを管理するREST APIを作成する。
+
+* <<Initial_Setting, 初期設定>>
+  - <<pom_xml_Setting,pom.xmlの設定>>
+  - <<application_yml_Setting,application.ymlの設定>>
+* <<Create_Todo,Todoクラスの作成>>
+* <<Create_TodoResource,TodoResourceクラスの作成>>
+* <<Create_Repository,Repositoryの作成>>
+  - <<Create_Repository_Interface,TodoRepositoryインターフェースの作成>>
+  - <<Test_Repository,Repositoryの単体テスト>>
+* <<Create_Service,Serviceの作成>>
+  - <<Create_TodoService_Interface,TodoServiceインターフェースの作成>>
+  - <<Create_TodoService_Impl,TodoServiceImplクラスの作成>>
+  - <<Test_Service,Serviceの単体テスト>>
+* <<Create_Controller,Controllerの作成>>
+  - <<Create_TodoController,TodoControllerクラスの作成>>
+  - <<Test_Controller,Controllerの単体テスト>>
+
+[[Initial_Setting]]
+=== 初期設定
+
+REST APIを作成するにあたり必要なライブラリを設定する。
+
+[[pom_xml_Setting]]
+==== pom.xmlの設定
+下記のStarterを``pom.xml``に追加する。 +
+追加したStarterにより、Bean定義などのアプリケーション設定が不要になり、開発者が設定を記述する作業が削減される。
+
+* dozer-{SBS}
+* mybatis-{SBS}-test
+
+``pom.xml``は、以下のような設定となっている。
+
+[source, xml]
+.pom.xml
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.2.0.RELEASE</version>
+        <relativePath /> <!-- lookup parent from repository -->
+    </parent>
+    <groupId>com.example</groupId>
+    <artifactId>tutorial</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>tutorial</name>
+    <description>tutorial application for development reference</description>
+
+    <properties>
+        <java.version>11</java.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter</artifactId>
+            <version>2.1.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.junit.vintage</groupId>
+                    <artifactId>junit-vintage-engine</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- (1) -->
+        <dependency>
+            <groupId>com.github.dozermapper</groupId>
+            <artifactId>dozer-spring-boot-starter</artifactId>
+            <version>6.5.0</version>
+        </dependency>
+        <!-- (2) -->
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter-test</artifactId>
+            <version>2.1.0</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
+----
+[cols="1,9", options="header"]
+.追加した各モジュールの説明
+|===
+|項番
+|説明
+
+|(1)
+|Dozerは、Java Beanのマッピング機能ライブラリである。 +
+変換元のBeanから変換先のBeanに、再帰的(ネストした構造)に、値をコピーする。
+
+|(2)
+|mybatis-{SBS}-testは、MyBatisの機能をテストするライブラリである。
+|===
+
+[[application_yml_Setting]]
+==== application.ymlの設定
+{SB}では、設定ファイルに{SB}で用意されているプロパティを定義することで、{SBA}で生成されるBeanの設定を変更することができる。 +
+また、{SB}ではYAML形式のプロパティファイルが使用できるため、本チュートリアルではYAMLを使用する。 +
+
+``src/main/resources/``下にある``application.properties``上で右クリック -> [Refactor] -> [Rename...]を選択し、
+New nameを``application.yml``と入力して「OK」する。
+
+``application.yml``に下記の設定を追加する。
+
+[source, yml]
+.src/main/resources/application.yml
+----
+# (1)
+mybatis:
+  configuration:
+    mapUnderscoreToCamelCase: true
+----
+[cols="1,9", options="header"]
+.application.ymlの説明
+|===
+|項番
+|説明
+
+|(1)
+|mapUnderscoreToCamelCaseをtrueにすると、スネークケース形式のカラム名をキャメルケース形式に自動変換される。 +
+MyBatisのResultMap（``@Result``）が不要になるため、よりシンプルなSQLとなる。
+|===
+
+[TIP]
+.サーバポート番号の変更について
+====
+アプリケーション起動時のポート番号は、デフォルトで``8080``を使用する。 +
+任意のポート番号でアプリケーションを起動したい場合、下記の設定を``application.yml``に追記する。
+
+[source, yml]
+.src/main/resources/application.yml
+----
+server:
+  port: <任意のポート番号>
+----
+
+なお、``<任意のポート番号>``を``0``にすると、ランダムな空きポート番号が使用される。
+====
+
+[[Create_Package]]
+=== パッケージの作成
+下記の3つのパッケージを作成する。
+
+* REST APIのクラスを格納するパッケージ
+* 例外処理クラスを格納するパッケージ
+* 単体テストのクラスを格納するパッケージ
+
+各クラスを格納するルートパッケージのパッケージ名は``tutorial``として、配下にリソース毎のパッケージ（リソース名の小文字）を作成することを推奨する。 +
+Package Explorer上で右クリック -> [New] -> [Package]を選択し、「New Java Package」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+
+[cols="3,7", options="header"]
+.REST APIのクラスを格納するパッケージの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/main/java
+
+|Name
+|com.example.tutorial.todo
+|===
+
+[cols="3,7", options="header"]
+.例外処理クラスを格納するパッケージの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/main/java
+
+|Name
+|com.example.tutorial.common.exception
+|===
+
+[cols="3,7", options="header"]
+.単体テストのクラスを格納するパッケージの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/test/java
+
+|Name
+|com.example.tutorial.todo
+|===
+
+作成したパッケージは以下のディレクトリに格納される。
+
+image::Tutorial/CreatePackages.png[Packages]
+
+[[Create_SourceFolder]]
+=== ソースフォルダの作成
+テスト用初期データを格納するソースフォルダを作成する。 +
+Package Explorer上で右クリック -> [New] -> [Source Folder]を選択し、「New Source Folder」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+
+[cols="3,7", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Project name
+|tutorial
+
+|Folder name
+|src/test/resources
+|===
+
+作成したソースフォルダは以下のディレクトリに格納される。
+
+image::Tutorial/CreateSourceFolder.png[SourceFolder]
+
+作成したソースフォルダをテスト用ソースフォルダにするために、MavenのUpdate Projectを実行する。 +
+Package Explorer上で右クリック -> [Maven] ->  [Update Project…]を選択し、「OK」ボタンをクリックする。 +
+Update Projectを実行すると、テスト用ソースフォルダになることがアイコンからも確認できる。
+
+image::Tutorial/CreateTestSourceFolder.png[TestSourceFolder]
+
+[[Create_Todo]]
+=== Todoクラスの作成
+Todoリソースを保持するためのクラスとして、Todoクラスを作成する。 +
+Package Explorer上で右クリック -> [New] -> [Class]を選択し、「New Java Class」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+[cols="3,7", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/main/java
+
+|Package
+|com.example.tutorial.todo
+
+|Name
+|Todo
+
+|Interfaces
+|java.io.Serializable
+|===
+
+作成したクラスは以下のディレクトリに格納される。
+
+image::Tutorial/CreateTodo.png[Todo]
+
+作成したクラスに下記のプロパティを追加する。
+
+* ID -> todoId
+* タイトル -> todoTitle
+* 完了フラグ -> finished
+* 作成日 -> createdAt
+
+[source,java]
+.com.example.tutorial.todo.Todo.java
+----
+package com.example.tutorial.todo;
+
+import java.io.Serializable;
+import java.time.LocalDateTime;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data // (1)
+@AllArgsConstructor // (2)
+@NoArgsConstructor // (3)
+public class Todo implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    private Long todoId;
+
+    private String todoTitle;
+
+    private boolean finished;
+
+    private LocalDateTime createdAt;
+
+}
+----
+
+[cols="1,9", options="header"]
+.Todoクラスの各アノテーションの説明
+|===
+|項番
+|説明
+
+|(1)
+|ボイラープレートコードを取り除くために、クラスレベルに``@Data``アノテーションをつける。
+
+|(2)
+|引数付きコンストラクタを自動生成するために、クラスレベルに``@AllArgsConstructor``アノテーションをつける。
+
+|(3)
+|デフォルトコンストラクタを自動生成するために、クラスレベルに``@NoArgsConstructor``アノテーションをつける。
+|===
+
+[[Create_TodoResource]]
+=== TodoResourceクラスの作成
+クライアントとの入出力で使用するインターフェースとして、``TodoResource``クラスを作成する。 +
+本チュートリアルでは、REST APIの入出力となるJSON(またはXML)を表現するJava Beanを *Resourceクラス* と呼ぶ。 +
+Package Explorer上で右クリック -> [New] -> [Class]を選択し、「New Java Class」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+
+[cols="3,7", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/main/java
+
+|Package
+|com.example.tutorial.todo
+
+|Name
+|TodoResource
+
+|Interfaces
+|java.io.Serializable
+|===
+
+作成したクラスは以下のディレクトリに格納される。
+
+image::Tutorial/CreateTodoResource.png[TodoResource]
+
+作成したクラスに以下のプロパティを追加する。
+
+* ID -> todoId
+* タイトル -> todoTitle
+* 完了フラグ -> finished
+* 作成日 -> createdAt
+
+[source, java]
+.com.example.tutorial.todo.TodoResource.java
+----
+package com.example.tutorial.todo;
+
+import java.io.Serializable;
+import java.time.LocalDateTime;
+import javax.validation.constraints.Max;
+import javax.validation.constraints.NotEmpty;
+import javax.validation.constraints.Size;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class TodoResource implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    private Long todoId;
+
+    @NotEmpty
+    @Size(max = 30)
+    private String todoTitle;
+
+    private boolean finished;
+
+    @JsonFormat(pattern = "uuuu/MM/dd HH:mm:ss")
+    private LocalDateTime createdAt;
+
+}
+----
+
+[NOTE]
+.Jacksonデフォルトの日付のフォーマット指定
+====
+Jacksonデフォルトの日付のフォーマットを指定する場合、プロパティファイル(``application.yml``または``application.properties``)の``spring.jackson.date-format``に出力フォーマットを設定することで可能である。 +
+ただし、``java.util.Date``型または``java.util.Calender``型のフィールドをフォーマットする場合のみ使用できる。
+====
+
+[[Create_Repository]]
+=== Repositoryの作成
+
+MyBatisを使用してデータベースにアクセスするための実装/設定を行う。
+
+[[Create_Table]]
+==== テーブルの作成
+本チュートリアルでは、データベースはH2を使用する。 +
+{SB}でH2を使用する場合、データソースが自動的に設定されるため、手動でデータソースを設定する作業は不要である。 +
+
+まず、todoテーブルを作成するSQLファイル``schema.sql``を作成する。 +
+Package Explorer上で右クリック -> [New] -> [File]を選択し、「Create New File」ダイアログを表示し、下記の設定値を入力して「Finish」する。 +
+
+[cols="4,6", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Enter or select the parent folder
+|tutorial/src/main/resources
+
+|File name
+|schema.sql
+|===
+
+``schema.sql``は以下のディレクトリに格納される。
+
+image::Tutorial/CreateSchemaSQL.png[SchemaSQL]
+
+下記にtodoテーブルの定義を示す。
+
+[cols="20,20,20,10,10,20", options="header"]
+.todoテーブルの定義
+|===
+|論理カラム名
+|物理カラム名
+|データ型
+|桁数
+|PK
+|デフォルト値
+
+|ID
+|todo_id
+|BIGINT
+|
+|Yes
+|IDENTITY
+
+|タイトル
+|todo_title
+|VARCHAR
+|30
+|
+|
+
+|完了フラグ
+|finished
+|BOOLEAN
+|
+|
+|
+
+|作成日
+|created_at
+|TIMESTAMP
+|
+|
+|
+|===
+
+{SB}では、クラスパス直下にSQLファイルを配置することで、{SB}起動時にSQLファイルを読み込み実行する。
+
+[source, sql]
+.src/main/resources/schema.sql
+----
+CREATE TABLE IF NOT EXISTS todo (
+  todo_id BIGINT IDENTITY PRIMARY KEY,
+  todo_title VARCHAR(30),
+  finished BOOLEAN,
+  created_at TIMESTAMP
+);
+----
+
+[[Create_Repository_Interface]]
+==== TodoRepositoryインターフェースの作成
+Todoリソースを格納するデータベースにアクセスするために、MyBatisを使用してRepositoryインターフェースを作成する。 +
+Package Explorer上で右クリック -> [New] -> [Interface]を選択し、「New Java Interface」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+
+[cols="3,7", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/main/java
+
+|Package
+|com.example.tutorial.todo
+
+|Name
+|TodoRepository
+|===
+
+作成したクラスは以下のディレクトリに格納される。
+
+image::Tutorial/CreateTodoRepository.png[TodoRepository]
+
+作成したインターフェースに、本チュートリアルのREST APIで必要となる下記のCRUD操作を行うメソッドを定義する。
+
+[source, java]
+.com.example.tutorial.todo.TodoRepository.java
+----
+package com.example.tutorial.todo;
+
+import java.util.Collection;
+import java.util.Optional;
+import org.apache.ibatis.annotations.Delete;
+import org.apache.ibatis.annotations.Insert;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Options;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
+
+@Mapper // (1)
+public interface TodoRepository {
+
+    @Select("SELECT todo_id, todo_title, finished, created_at FROM todo WHERE todo_id = #{todoId}") // (2)
+    Optional<Todo> findById(Long todoId);
+
+    @Select("SELECT todo_id, todo_title, finished, created_at FROM todo")
+    Collection<Todo> findAll();
+
+    @Insert("INSERT INTO todo(todo_title, finished, created_at) VALUES(#{todoTitle}, #{finished}, #{createdAt})")
+    @Options(useGeneratedKeys = true, keyProperty = "todoId")
+    void create(Todo todo);
+
+    @Update("UPDATE todo SET finished = true WHERE todo_id = #{todoId}")
+    void updateById(Long todoId);
+
+    @Delete("DELETE FROM todo WHERE todo_id = #{todoId}")
+    void deleteById(Long todoId);
+
+    @Select("SELECT COUNT(*) FROM todo WHERE finished = #{finished}")
+    long countByFinished(boolean finished);
+
+}
+----
+
+[cols="1,9", options="header"]
+.TodoRepositoryの説明
+|===
+|項番
+|説明
+
+|(1)
+|{SB}でMyBatisを使用するために、``@Mapper``アノテーションをつける。
+
+|(2)
+|``@Select``アノテーションに、``todoId``が一致するレコードを1件取得するSQLを実装する。
+
+各メソッドも同様に実装する。
+|===
+
+[[Test_Repository]]
+==== Repositoryの単体テスト
+MyBatisを利用したRepositoryのテストをする。
+
+{SB}はテストをサポートするアノテーションを提供している。 +
+テストクラスに{SB}が提供するアノテーションを付与することで、通常の{ST}に加えてテスト関連の設定(テスト対象およびテストをサポートするコンフィギュレーションが読み込まれる)が有効化される。 +
+これにより、従来の{SF}を用いたアプリケーション開発で実施していたテスト関連の設定を定義する作業を大幅に削減することができる。
+
+[WARNING]
+.テスト方法および実装について
+====
+本チュートリアルで提示するテスト方法および実装はあくまで一例であり、実際はテスト方針に合わせたテスト方法および実装を検討いただきたい。
+====
+
+[[Create_Init_Data]]
+===== 初期データの作成
+``Repository``のテスト用初期データであるSQLファイル``data.sql``を作成する。 +
+Package Explorer上で右クリック -> [New] -> [File]を選択し、「Create New File」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+
+[cols="4,6", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Enter or select the parent folder
+|tutorial/src/test/resources
+
+|File name
+|data.sql
+|===
+
+作成した``data.sql``は以下のディレクトリに格納される。
+
+image::Tutorial/CreateDataSQL.png[DataSQL]
+
+[source, sql]
+.src/test/resources/data.sql
+----
+INSERT INTO todo (todo_title, finished, created_at ) VALUES ('sample todo 1', false, '2019-09-19 01:01:01' )
+INSERT INTO todo (todo_title, finished, created_at ) VALUES ('sample todo 2', true, '2019-09-19 02:02:02' )
+INSERT INTO todo (todo_title, finished, created_at ) VALUES ('sample todo 3', false, '2019-09-19 03:03:03' )
+----
+
+[[Create_Repository_Test]]
+===== {ST}の標準機能を利用したテストの実装
+``@MyBatisTest``アノテーションを使用した``Repository``の{SLT}のために、``TodoRepositoryTest``クラスを作成する。 +
+Package Explorer上で右クリック -> [New] -> [Class]を選択し、「New Java Class」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+
+[cols="3,7", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/test/java
+
+|Package
+|com.example.tutorial.todo
+
+|Name
+|TodoRepositoryTest
+|===
+
+作成したクラスは以下のディレクトリに格納される。
+
+image::Tutorial/CreateTodoRepositoryTest.png[TodoRepositoryTest]
+
+[source, java]
+.com.example.tutorial.todo.TodoRepositoryTest.java
+----
+package com.example.tutorial.todo;
+
+import static org.assertj.core.api.Assertions.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Collection;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mybatis.spring.boot.test.autoconfigure.MybatisTest;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.BeanPropertyRowMapper;
+import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.jdbc.support.rowset.SqlRowSet;
+
+@MybatisTest // (1)
+public class TodoRepositoryTest {
+
+    @Autowired
+    private TodoRepository todoRepository; // (2)
+
+    @Autowired
+    NamedParameterJdbcOperations jdbcOperations; // (3)
+
+    private Todo getTodo(Long todoId) {
+
+        Todo todo = new Todo(todoId, null, true, null);
+        return jdbcOperations.queryForObject("SELECT * FROM todo WHERE todo_id=:todoId",
+                new BeanPropertySqlParameterSource(todo),
+                new BeanPropertyRowMapper<Todo>(Todo.class) {
+                    @Override
+                    protected void initBeanWrapper(BeanWrapper bw) {
+                        super.initBeanWrapper(bw);
+                        bw.setAutoGrowNestedPaths(true);
+                    }
+                });
+    }
+
+    private Long getTodos(Long todoId) {
+        String sqlstr = "SELECT count(*) as cnt FROM todo WHERE todo_id=:todoId ";
+        SqlParameterSource param = new MapSqlParameterSource().addValue("todoId", todoId);
+        SqlRowSet todo = jdbcOperations.queryForRowSet(sqlstr, param);
+        todo.next();
+        return todo.getLong("cnt");
+    }
+
+    @Test
+    @DisplayName("全Todoが取得できることを確認する(Repository)")
+    void testFindAll() {
+        // setup
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu/MM/dd HH:mm:ss");
+        LocalDateTime createdAt1 = LocalDateTime.parse("2019/09/19 01:01:01", dtf);
+        LocalDateTime createdAt2 = LocalDateTime.parse("2019/09/19 02:02:02", dtf);
+        LocalDateTime createdAt3 = LocalDateTime.parse("2019/09/19 03:03:03", dtf);
+
+        // run
+        Collection<Todo> actualTodos = todoRepository.findAll();
+
+        // check
+        assertThat(actualTodos).extracting("todoId", "todoTitle", "finished", "createdAt")
+                .contains(tuple(1L, "sample todo 1", false, createdAt1));
+        assertThat(actualTodos).extracting("todoId", "todoTitle", "finished", "createdAt")
+                .contains(tuple(2L, "sample todo 2", true, createdAt2));
+        assertThat(actualTodos).extracting("todoId", "todoTitle", "finished", "createdAt")
+                .contains(tuple(3L, "sample todo 3", false, createdAt3));
+    }
+
+    @Test
+    @DisplayName("todoIdに対応するTodoが取得できることを確認する(Repository)")
+    void testFindById() {
+
+        // run
+        Todo actualTodo = todoRepository.findById(1L).get();
+        Todo todo = getTodo(1L);
+
+        // check
+        assertThat(actualTodo.getTodoId()).isEqualTo(todo.getTodoId());
+        assertThat(actualTodo.getTodoTitle()).isEqualTo(todo.getTodoTitle());
+        assertThat(actualTodo.isFinished()).isEqualTo(todo.isFinished());
+        assertThat(actualTodo.getCreatedAt()).isEqualTo(todo.getCreatedAt());
+    }
+
+    @Test
+    @DisplayName("新たなTodoが作成できることを確認する(Repository)")
+    void testCreate() {
+        // setup
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu/MM/dd HH:mm:ss");
+        LocalDateTime createdAt = LocalDateTime.parse("2019/09/19 04:04:04", dtf);
+        Todo actualTodo = new Todo(4L, "sample todo 4", false, createdAt);
+
+        // run
+        todoRepository.create(actualTodo);
+        Todo todo = getTodo(4L);
+
+        // check
+        assertThat(actualTodo.getTodoTitle()).isEqualTo(todo.getTodoTitle());
+    }
+
+    @Test
+    @DisplayName("finishedをfalseからtrueに変更できることを確認する(Repository)")
+    void testUpdateById() {
+        // run
+        todoRepository.updateById(1L);
+        Todo todo = getTodo(1L);
+
+        // check
+        assertThat(todo.isFinished()).isTrue();
+    }
+
+    @Test
+    @DisplayName("todoId=1が削除できていることを確認する(Repository)")
+    void testDeleteById() {
+        // run
+        todoRepository.deleteById(1L);
+        Long cnt = getTodos(1L);
+
+        // check
+        assertThat(cnt).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("未完了 or 完了済のTodoの件数を取得できることを確認する(Repository)")
+    void testCountByFinished() {
+        // run
+        long unfinishedCount = todoRepository.countByFinished(false);
+        long finishedCount = todoRepository.countByFinished(true);
+
+        // check
+        assertThat(unfinishedCount).isEqualTo(2);
+        assertThat(finishedCount).isEqualTo(1);
+    }
+
+}
+
+----
+[cols="1,9", options="header"]
+.TodoRepositoryTestの説明
+|===
+|項番
+|説明
+
+|(1)
+|クラスレベルに``@MybatisTest``アノテーションを設定する。 +
+MyBatisを使用したコンポーネントなどをテストする時に、必要となるコンポーネントのみ有効になる。 +
+``@MybatisTest``アノテーション内部には@Transactionalアノテーションが付与されており、テスト実行開始から終了まで一つのトランザクションとなり、デフォルトではテスト終了後にロールバックされる。
+
+|(2)
+|テスト対象である``TodoRepository``インターフェースのBeanをインジェクションする。
+
+|(3)
+|登録データの検証およびテストデータを登録するために、``NamedParameterJdbcOperations``インターフェースのBeanをインジェクションする。
+|===
+
+[[Test_Run_Repository]]
+===== TodoRepositoryのテストの実行
+本チュートリアルでは、STSを用いてJUnitを実行する。 +
+``TodoRepositoryTest.java``を右クリックし、[Run As] -> [JUnit Test]を選択し、テストを実行する。
+
+image::Tutorial/SelectJUnitTest.png[SelectJUnitTest]
+
+不具合なくテストが完了すると、以下のような画面が表示される。
+
+image::Tutorial/RunTodoRepositoryTest.png[TodoRepositoryTest Run]
+
+[[Create_Service]]
+=== Serviceの作成
+
+Todoリソースを取得、登録、完了、削除する業務処理クラスを実装する。
+
+[[Create_Exceptions]]
+==== 例外処理クラスの作成
+本チュートリアルでは、下記の2つの例外処理クラスを作成する。
+
+* ``BusinessException``クラス
+* ``ResourceNotFoundException``クラス
+
+作成したクラスは以下のディレクトリに格納される。
+
+image::Tutorial/CreateExceptions.png[ExceptionClass]
+
+[[Create_BusinessException]]
+===== BusinessExceptionクラスの作成
+<<Business_Requirements>>を満たさない場合のビジネス例外として``BusinessException``クラスを作成する。 +
+Package Explorer上で右クリック -> [New] -> [Class]を選択し、「New Java Class」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+[cols="3,7", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/main/java
+
+|Package
+|com.example.tutorial.common.exception
+
+|Name
+|BusinessException
+
+|SuperClass
+|java.lang.RuntimeException
+|===
+
+[source, java]
+.com.example.tutorial.common.exception.BusinessException.java
+----
+package com.example.tutorial.common.exception;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
+
+@ResponseStatus(code = HttpStatus.CONFLICT)
+public class BusinessException extends RuntimeException {
+
+    private static final long serialVersionUID = 1L;
+
+    public BusinessException(String message) {
+        super(message);
+    }
+
+    public BusinessException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+}
+----
+
+[[Create_ResourceNotFoundException]]
+===== ResourceNotFoundExceptionクラスの作成
+リソース未検出例外として``ResourceNotFoundException``クラスを作成する。 +
+Package Explorer上で右クリック -> [New] -> [Class]を選択し、「New Java Class」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+[cols="3,7", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/main/java
+
+|Package
+|com.example.tutorial.common.exception
+
+|Name
+|ResourceNotFoundException
+
+|SuperClass
+|java.lang.RuntimeException
+|===
+
+[source, java]
+.com.example.tutorial.common.exception.ResourceNotFoundException.java
+----
+package com.example.tutorial.common.exception;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
+
+@ResponseStatus(code = HttpStatus.NOT_FOUND)
+public class ResourceNotFoundException extends RuntimeException {
+
+    private static final long serialVersionUID = 1L;
+
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+
+    public ResourceNotFoundException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+----
+
+[[Create_TodoService_Interface]]
+==== TodoServiceインターフェースの作成
+Todoリソースを取得、登録、完了、削除するための業務処理として、``TodoService``インターフェースを作成する。 +
+Package Explorer上で右クリック -> [New] -> [Interface]を選択し、「New Java Interface」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+
+[cols="3,7", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/main/java
+
+|Package
+|com.example.tutorial.todo
+
+|Name
+|TodoService
+|===
+
+作成したクラスは以下のディレクトリに格納される。
+
+image::Tutorial/CreateTodoService.png[TodoService]
+
+作成したインターフェースに、本チュートリアルの業務処理で必要となるメソッドを定義する。
+
+[source, java]
+.com.example.tutorial.todo.TodoService.java
+----
+package com.example.tutorial.todo;
+
+import java.util.Collection;
+
+public interface TodoService {
+
+    Todo findOne(Long todoId);
+
+    Collection<Todo> findAll();
+
+    Todo create(Todo todo);
+
+    Todo finish(Long todoId);
+
+    void delete(Long todoId);
+}
+----
+
+[[Create_TodoService_Impl]]
+==== TodoServiceImplクラスの作成
+``TodoService``インターフェースに定義したメソッドを実装する``TodoServiceImpl``クラスを作成する。 +
+Package Explorer上で右クリック -> [New] -> [Class]を選択し、「New Java Class」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+
+[cols="3,7", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/main/java
+
+|Package
+|com.example.tutorial.todo
+
+|Name
+|TodoServiceImpl
+
+|Interfaces
+|com.example.tutorial.todo.TodoService
+|===
+
+作成したクラスは以下のディレクトリに格納される。
+
+image::Tutorial/CreateTodoServiceImpl.png[TodoServiceImpl]
+
+作成したクラスに、本チュートリアルの業務処理で必要となるメソッドを定義する。
+
+[source, java]
+.com.example.tutorial.todo.TodoServiceImpl.java
+----
+package com.example.tutorial.todo;
+
+import java.time.LocalDateTime;
+import java.util.Collection;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import com.example.tutorial.common.exception.BusinessException;
+import com.example.tutorial.common.exception.ResourceNotFoundException;
+
+@Service // (1)
+@Transactional // (2)
+public class TodoServiceImpl implements TodoService {
+
+    private static final long MAX_UNFINISHED_COUNT = 5;
+
+    @Autowired // (3)
+    TodoRepository todoRepository;
+
+    @Override
+    public Todo findOne(Long todoId) {
+        return todoRepository.findById(todoId).orElseThrow(() -> new ResourceNotFoundException(
+                "The requested Todo is not found. (id=" + todoId + ")"));
+    }
+
+    @Override
+    public Collection<Todo> findAll() {
+        return todoRepository.findAll();
+    }
+
+    @Override
+    public Todo create(Todo todo) {
+        long unfinishedCount = todoRepository.countByFinished(false);
+        if (unfinishedCount >= MAX_UNFINISHED_COUNT) {
+            throw new BusinessException(
+                    "The count of un-finished Todo must not be over " + MAX_UNFINISHED_COUNT + ".");
+        }
+
+        LocalDateTime createdAt = LocalDateTime.now();
+        todo.setCreatedAt(createdAt);
+        todo.setFinished(false);
+
+        todoRepository.create(todo);
+        return todo;
+    }
+
+    @Override
+    public Todo finish(Long todoId) {
+        Todo todo = findOne(todoId);
+        if (todo.isFinished()) {
+            throw new BusinessException(
+                    "The requested Todo is already finished. (id=" + todoId + ")");
+        }
+        todo.setFinished(true);
+        todoRepository.updateById(todoId);
+        return todo;
+    }
+
+    @Override
+    public void delete(Long todoId) {
+        findOne(todoId);
+        todoRepository.deleteById(todoId);
+    }
+
+}
+----
+[cols="1,9", options="header"]
+.TodoServiceImplの説明
+|===
+|項番
+|説明
+
+|(1)
+|ServiceとしてComponentScanの対象とするため、クラスレベルに``@Service``アノテーションをつける。
+
+|(2)
+|クラスレベルに``@Transaction``アノテーションをつけることで、公開メソッドをすべてトランザクション管理する。 +
+メソッド開始時にトランザクションを開始し、メソッド正常終了時にトランザクションのコミットが行われる。 +
+また、途中で非検査例外が発生した場合は、トランザクションがロールバックされる。 +
+ +
+データベースを使用しない場合は、``@Transaction``アノテーションは不要である。
+
+|(3)
+|``@Autowired``アノテーションで、``TodoRepository``インターフェースのBeanをインジェクションする。
+|===
+
+[NOTE]
+.エラーメッセージの設定
+====
+本チュートリアルでは、説明を単純化するため、エラーメッセージをハードコードしているが、国際化への対応やメンテナンスの観点で本来は好ましくない。 通常、メッセージは、プロパティファイルに外部化することが推奨される。 プロパティファイルに外部化する方法は、<<Message_Management.adoc#MessageManagement,メッセージ管理>>を参照すること。
+====
+
+[[Test_Service]]
+==== Serviceの単体テスト
+TodoServiceの単体テストを行う。 +
+本チュートリアルでは、単体テストをするために、テスト対象の依存クラスをMock化する。 +
+理由は下記の2点である。 +
+
+* テスト対象の依存クラスの動作が保証されていない場合や、テスト対象の依存クラスが未作成の場合など、依存クラスを利用できない場合を想定しているため
+* テスト対象の依存クラスをそのまま使用する場合、テストデータ作成など依存クラスを利用するための準備が必要であり、テストの作業効率の低下が懸念されるため
+
+[[Create_Service_Test]]
+===== Mockを利用した単体テストの実装
+テスト対象のServiceの実装クラスが依存するクラスをMock化する場合のテストをする。 +
+Package Explorer上で右クリック -> [New] -> [Class]を選択し、「New Java Class」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+
+[cols="3,7", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/test/java
+
+|Package
+|com.example.tutorial.todo
+
+|Name
+|TodoServiceTest
+|===
+
+作成したクラスは以下のディレクトリに格納される。
+
+image::Tutorial/CreateTodoServiceTest.png[TodoServiceTest]
+
+[source, java]
+.com.example.tutorial.todo.TodoServiceTest.java
+----
+package com.example.tutorial.todo;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.BDDMockito.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Optional;
+
+@SpringBootTest(classes = TodoServiceImpl.class) // (1)
+public class TodoServiceTest {
+
+    @MockBean // (2)
+    private TodoRepository todoRepository;
+
+    @Autowired // (3)
+    private TodoService todoService;
+
+    @Test
+    @DisplayName("todoIdに対応するTodoが取得できることを確認する(Service)")
+    void testFindOne() {
+        // setup
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu/MM/dd HH:mm:ss");
+        LocalDateTime createdAt = LocalDateTime.parse("2019/09/19 01:01:01", dtf);
+        Todo expectTodo = new Todo(1L, "sample todo 1", false, createdAt);
+        Optional<Todo> expectOptionalTodo = Optional.of(expectTodo);
+        given(todoRepository.findById(1L)).willReturn(expectOptionalTodo);
+
+        // run
+        Todo actualTodo = todoService.findOne(1L);
+
+        // check
+        then(todoRepository).should(times(1)).findById(1L);
+        assertThat(actualTodo.getTodoId()).isEqualTo(1);
+        assertThat(actualTodo.getTodoTitle()).isEqualTo("sample todo 1");
+        assertThat(actualTodo.isFinished()).isEqualTo(false);
+        assertThat(actualTodo.getCreatedAt()).isEqualTo(createdAt);
+    }
+
+    @Test
+    @DisplayName("全Todoが取得できることを確認する(service)")
+    void testFindAll() {
+        // setup
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu/MM/dd HH:mm:ss");
+        LocalDateTime createdAt1 = LocalDateTime.parse("2019/09/19 01:01:01", dtf);
+        LocalDateTime createdAt2 = LocalDateTime.parse("2019/09/19 02:02:02", dtf);
+        Todo expectTodo1 = new Todo(1L, "sample todo 1", false, createdAt1);
+        Todo expectTodo2 = new Todo(2L, "sample todo 2", true, createdAt2);
+
+        Collection<Todo> expectTodos = Arrays.asList(expectTodo1, expectTodo2);
+        given(todoRepository.findAll()).willReturn(expectTodos);
+
+        // run
+        Collection<Todo> actualTodos = todoService.findAll();
+
+        // check
+        then(todoRepository).should(times(1)).findAll();
+        assertThat(actualTodos).extracting("todoId", "todoTitle", "finished", "createdAt")
+                .contains(tuple(1L, "sample todo 1", false, createdAt1));
+        assertThat(actualTodos).extracting("todoId", "todoTitle", "finished", "createdAt")
+                .contains(tuple(2L, "sample todo 2", true, createdAt2));
+    }
+
+    @Test
+    @DisplayName("新たなTodoが作成できることを確認する(service)")
+    void testCreate() {
+        // setup
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu/MM/dd HH:mm:ss");
+        LocalDateTime createdAt = LocalDateTime.parse("2019/09/19 03:03:03", dtf);
+        Todo expectTodo = new Todo(3L, "sample todo 3", false, createdAt);
+
+        doNothing().when(todoRepository).create(expectTodo);
+
+        // run
+        todoService.create(expectTodo);
+
+        // check
+        then(todoRepository).should(times(1)).create(expectTodo);
+    }
+
+    @Test
+    @DisplayName("todoId=1のfinishedがtrueになることを確認する(service)")
+    void testFinish() {
+        // setup
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu/MM/dd HH:mm:ss");
+        LocalDateTime createdAt = LocalDateTime.parse("2019/09/19 01:01:01", dtf);
+        Todo expectTodo = new Todo(1L, "sample todo 1", false, createdAt);
+        Optional<Todo> expectOptionalTodo = Optional.of(expectTodo);
+        given(todoRepository.findById(1L)).willReturn(expectOptionalTodo);
+
+        doNothing().when(todoRepository).updateById(1L);
+
+        // run
+        todoService.finish(1L);
+
+        // check
+        then(todoRepository).should(times(1)).findById(1L);
+        then(todoRepository).should(times(1)).updateById(1L);
+    }
+
+    @Test
+    @DisplayName("todoId=1がDeleteによって削除されることを確認する(service)")
+    void testDelete() {
+        // setup
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu/MM/dd HH:mm:ss");
+        LocalDateTime createdAt = LocalDateTime.parse("2019/09/19 01:01:01", dtf);
+        Todo expectTodo = new Todo(1L, "sample todo 1", false, createdAt);
+        Optional<Todo> expectOptionalTodo = Optional.of(expectTodo);
+        given(todoRepository.findById(1L)).willReturn(expectOptionalTodo);
+
+        doNothing().when(todoRepository).deleteById(1L);
+
+        // run
+        todoService.delete(1L);
+
+        // check
+        then(todoRepository).should(times(1)).findById(1L);
+        then(todoRepository).should(times(1)).deleteById(1L);
+    }
+}
+----
+[cols="1,9", options="header"]
+.TodoServiceTestの説明
+|===
+|項番
+|説明
+
+|(1)
+|クラスレベルに``@SpringBootTest``アノテーションを設定する。 +
+``classes``にテスト対象の``TodoServiceImpl``クラスを指定することで、``TodoServiceImpl``クラスのみ有効になる。
+
+|(2)
+|``@MockBean``アノテーションを付与することで、``TodoServiceImpl``が依存している``TodoRepository``をMock化する。
+
+|(3)
+|``@Autowired``アノテーションを付与することで、``TodoService``インターフェースのBeanをインジェクションする。 +
+テスト対象クラスと``@MockBean``アノテーションが付与されたクラスが一致する場合、自動的にMockオブジェクトが設定される。
+|===
+
+[[Test_Run_Service]]
+===== TodoServiceのテストの実行
+``TodoServiceTest.java``を右クリックし、[Run As] -> [JUnit Test]を選択し、対象テストクラスを実行する。 +
+不具合なくテストが完了すると、以下のような画面が表示される。
+
+image::Tutorial/RunTodoServiceTest.png[TodoServiceTest Run]
+
+[[Create_Controller]]
+=== Controllerの作成
+
+リクエストに対する業務処理(Todoリソースの取得、登録、完了、削除)をし、レスポンスとして業務処理に対応するJSONを返すREST APIを作成する。
+
+[[Create_TodoController]]
+==== TodoControllerクラスの作成
+``@RestController``を利用して、<<Processing_Specifications>>を満たすRESTful Web Serviceの``TodoController``クラスを作成する。 +
+Package Explorer上で右クリック -> [New] -> [Class]を選択し、「New Java Class」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+
+[cols="3,7", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/main/java
+
+|Package
+|com.example.tutorial.todo
+
+|Name
+|TodoController
+|===
+
+作成したクラスは以下のディレクトリに格納される。
+
+image::Tutorial/CreateTodoController.png[TodoController]
+
+[source, java]
+.com.example.tutorial.todo.TodoController.java
+----
+package com.example.tutorial.todo;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.http.HttpStatus;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+import com.github.dozermapper.core.Mapper;
+
+@RestController // (1)
+@RequestMapping("todos") // (2)
+public class TodoController {
+
+    @Autowired // (3)
+    TodoService todoService;
+
+    @Autowired // (4)
+    Mapper beanMapper;
+
+    @GetMapping
+    public List<TodoResource> getTodos() {
+        Collection<Todo> todos = todoService.findAll();
+        return todos.stream().map(todo -> beanMapper.map(todo, TodoResource.class))
+                .collect(Collectors.toList());
+    }
+
+    @GetMapping("{todoId}")
+    public TodoResource getTodo(@PathVariable("todoId") Long todoId) {
+        Todo todo = todoService.findOne(todoId);
+        return beanMapper.map(todo, TodoResource.class);
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public TodoResource postTodo(@RequestBody @Validated TodoResource todoResource) {
+        Todo createdTodo = todoService.create(beanMapper.map(todoResource, Todo.class));
+        return beanMapper.map(createdTodo, TodoResource.class);
+    }
+
+    @PutMapping("{todoId}")
+    public TodoResource putTodo(@PathVariable("todoId") Long todoId) {
+        Todo finishedTodo = todoService.finish(todoId);
+        return beanMapper.map(finishedTodo, TodoResource.class);
+    }
+
+    @DeleteMapping("{todoId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteTodo(@PathVariable("todoId") Long todoId) {
+        todoService.delete(todoId);
+    }
+
+}
+----
+[cols="1,9a", options="header"]
+.TodoControllerの説明
+|===
+|項番
+|説明
+
+|(1)
+|クラスレベルに``@RestController``アノテーションを付与する。 +
+``@RestController``アノテーションを付与することで、下記のアノテーションを付与したのと同じ意味となる。
+
+* ``@Controller``アノテーション(``org.springframework.stereotype.Controller``)
+* ``@ResponseBody``アノテーション(``org.springframework.web.bind.annotation.ResponseBody``)
+
+Controllerのメソッドに``@ResponseBody``を付与することで、返却したResourceオブジェクトがJSONやXMLにmarshalされ、レスポンスBODYに設定される。
+
+|(2)
+|URI(パス)をマッピングする。 +
+具体的には、``@RequestMapping``アノテーションのvalue属性に、リソースのコレクションを表すパスを指定する。 +
+上記例では、``/todos``というパスをマッピングしている。 +
+
+|(3)
+|``@Autowired``アノテーションで、``TodoService``インターフェースのBeanをインジェクションする。
+
+|(4)
+|``TodoResource``を``Todo``に変換するために、Dozerの``com.github.dozermapper.core.Mapper``インターフェースのBeanをインジェクションする。
+|===
+
+
+[[Test_Controller]]
+==== Controllerの単体テスト
+``TestRestTemplate``を利用したControllerのテストをする。
+
+[[Create_Controller_Test]]
+===== TestRestTemplateを利用したテストの実装
+``TodoController``クラスにリクエストを送り、レスポンスを検証するために``TodoControllerTest``クラスを作成する。 +
+Package Explorer上で右クリック -> [New] -> [Class]を選択し、「New Java Class」ダイアログを表示し、下記の設定値を入力して「Finish」する。
+
+[cols="3,7", options="header"]
+.ダイアログの設定値
+|===
+|項目名
+|設定値
+
+|Source folder
+|tutorial/src/test/java
+
+|Package
+|com.example.tutorial.todo
+
+|Name
+|TodoControllerTest
+|===
+
+作成したクラスは以下のディレクトリに格納される。
+
+image::Tutorial/CreateTodoControllerTest.png[TodoControllerTest]
+
+[source, java]
+.com.example.tutorial.todo.TodoControllerTest.java
+----
+package com.example.tutorial.todo;
+
+import java.net.URI;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.Collection;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.*;
+import static org.mockito.Mockito.times;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.RequestEntity;
+import org.springframework.http.ResponseEntity;
+import com.github.dozermapper.core.Mapper;
+
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT) // (1)
+public class TodoControllerTest {
+
+    @Autowired // (2)
+    private TestRestTemplate testRestTemplate;
+
+    @Autowired
+    private Mapper beanMapper;
+
+    @MockBean // (3)
+    private TodoService todoService;
+
+    @Test
+    @DisplayName("GET Todosが正常に動作することを確認する(Controller)")
+    void testGetTodos() {
+        // setup
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu/MM/dd HH:mm:ss");
+        LocalDateTime createdAt1 = LocalDateTime.parse("2019/09/19 01:01:01", dtf);
+        LocalDateTime createdAt2 = LocalDateTime.parse("2019/09/19 02:02:02", dtf);
+        Todo expectTodo1 = new Todo(1L, "sample todo 1", false, createdAt1);
+        Todo expectTodo2 = new Todo(2L, "sample todo 2", true, createdAt2);
+        Collection<Todo> expectTodos = Arrays.asList(expectTodo1, expectTodo2);
+        given(todoService.findAll()).willReturn(expectTodos);
+
+        TodoResource[] expectTodoResources = expectTodos.stream()
+                .map(todo -> beanMapper.map(todo, TodoResource.class)).toArray(TodoResource[]::new);
+
+        // run
+        ResponseEntity<TodoResource[]> actualResponseEntity =
+                testRestTemplate.getForEntity("/todos", TodoResource[].class);
+
+        // check
+        then(todoService).should(times(1)).findAll();
+        assertThat(actualResponseEntity.getBody()).isEqualTo(expectTodoResources);
+        assertThat(actualResponseEntity.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @DisplayName("GET Todoが正常に動作することを確認する(Controller)")
+    void testGetTodo() throws Exception {
+        // setup
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu/MM/dd HH:mm:ss");
+        LocalDateTime createdAt = LocalDateTime.parse("2019/09/19 01:01:01", dtf);
+        Todo expectTodo = new Todo(1L, "sample todo 1", false, createdAt);
+        TodoResource expectTodoResource = beanMapper.map(expectTodo, TodoResource.class);
+        given(this.todoService.findOne(1L)).willReturn(expectTodo);
+
+        // run
+        ResponseEntity<TodoResource> actualResponseEntity =
+                testRestTemplate.getForEntity("/todos/1", TodoResource.class);
+
+        // check
+        then(todoService).should(times(1)).findOne(1L);
+        assertThat(actualResponseEntity.getBody()).isEqualTo(expectTodoResource);
+        assertThat(actualResponseEntity.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @DisplayName("POST Todoが正常に動作することを確認する(Controller)")
+    void testPostTodo() {
+        // setup
+        TodoResource inputTodoResource = new TodoResource();
+        inputTodoResource.setTodoTitle("sample todo 3");
+        Todo inputTodo = beanMapper.map(inputTodoResource, Todo.class);
+
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu/MM/dd HH:mm:ss");
+        LocalDateTime createdAt = LocalDateTime.parse("2019/09/19 03:03:03", dtf);
+        Todo expectTodo = new Todo(3L, "sample todo 3", false, createdAt);
+        TodoResource expectTodoResource = beanMapper.map(expectTodo, TodoResource.class);
+
+        given(this.todoService.create(any(Todo.class))).willReturn(expectTodo);
+
+        // run
+        ResponseEntity<TodoResource> actualResponseEntity =
+                testRestTemplate.postForEntity("/todos", inputTodoResource, TodoResource.class);
+
+        // check
+        then(todoService).should(times(1)).create(inputTodo);
+        assertThat(actualResponseEntity.getBody()).isEqualTo(expectTodoResource);
+        assertThat(actualResponseEntity.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    @Test
+    @DisplayName("PUT Todoが正常に動作することを確認する(Controller)")
+    void testPutTodo() {
+        // setup
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("uuuu/MM/dd HH:mm:ss");
+        LocalDateTime createdAt = LocalDateTime.parse("2019/09/19 01:01:01", dtf);
+        Todo expectTodo = new Todo(1L, "sample todo 1", true, createdAt);
+        TodoResource expectTodoResource = beanMapper.map(expectTodo, TodoResource.class);
+        given(this.todoService.finish(1L)).willReturn(expectTodo);
+
+        // run
+        RequestEntity<String> actualRequestEntity =
+                RequestEntity.put(URI.create("/todos/1")).body("");
+        ResponseEntity<TodoResource> actualResponseEntity =
+                testRestTemplate.exchange(actualRequestEntity, TodoResource.class);
+
+        // check
+        then(todoService).should(times(1)).finish(1L);
+        assertThat(actualResponseEntity.getBody()).isEqualTo(expectTodoResource);
+        assertThat(actualResponseEntity.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    @DisplayName("DELETE Todoが正常に動作することを確認する(Controller)")
+    void testDeleteTodo() {
+        // run
+        URI uri = URI.create("/todos/1");
+        ResponseEntity<String> actualResponseEntity =
+                testRestTemplate.exchange(uri, HttpMethod.DELETE, HttpEntity.EMPTY, String.class);
+
+        // check
+        then(todoService).should(times(1)).delete(1L);
+        assertThat(actualResponseEntity.getBody()).isNull();
+        assertThat(actualResponseEntity.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+}
+----
+[cols="1,9a", options="header"]
+.TodoControllerTestの説明
+|===
+|項番
+|説明
+
+|(1)
+|クラスレベルに``@SpringBootTest``アノテーションを設定する。 +
+``webEnvironment``属性に``WebEnvironment.RANDOM_PORT``を指定することで、空いているランダムなポートでテストを実行する。
+
+|(2)
+|``REST API``をテストするために、``TestRestTemplate``を使用する。 +
+``@SpringBootTest``アノテーションを使用しているため、``TestRestTemplate``クラスのBeanが自動生成される。 +
+``@Autowired``アノテーションを付与することで、``TestRestTemplate``クラスのBeanをインジェクションする。
+
+|(3)
+|``@MockBean``アノテーションを付与することで、``TodoController``が依存している``TodoService``をMock化する。
+|===
+
+[[Test_Run_Controller]]
+===== TodoControllerのテストの実行
+``TodoControllerTest.java``を右クリックし、[Run As] -> [JUnit Test]を選択し、対象テストクラスを実行する。 +
+不具合なくテストが完了すると、以下のような画面が表示される。
+
+image::Tutorial/RunTodoControllerTest.png[TodoControllerTest Run]
+
+[[Run_App]]
+== アプリケーションの実行
+{SB}は、{ES}を内包しているためアプリケーションサーバにデプロイする必要がなくなる。 +
+また、依存ライブラリを内包した即実行可能なJar形式で、アプリケーションをパッケージングできるため、1つのコマンドを実行するだけで簡単にアプリケーションを実行できる。 +
+これによって、多くの開発者が煩わしい作業だと感じていたアプリケーションサーバのセットアップやアプリケーションをデプロイする作業が不要になる。
+
+本チュートリアルでは、{EJ}ファイルを作成し実行する。
+
+[[Create_jar]]
+=== {EJ}ファイルの作成
+{SB}ではパッケージングの方法は通常Warではなく、アプリケーションの実行に必要な依存ライブラリをすべて含んだ{EJ}を使用する。 +
+デプロイも{EJ}を所定のフォルダに配置して実行するだけとなり、従来のアプリケーション開発と比較すると実行が非常に容易になっている。
+
+{EJ}ファイルを作成するために、プロジェクトのルートディレクトリ上で、下記のコマンドを実行する。
+
+[source, command]
+.{EJ}ファイルの作成
+----
+$ mvn package
+----
+
+コマンドを実行すると、``target``ディレクトリ配下に``tutorial-0.0.1-SNAPSHOT.jar``と``tutorial-0.0.1-SNAPSHOT.jar.original``が作成される。
+
+[source, console]
+.console
+----
+$ mvn package
+[INFO] Scanning for projects...
+[INFO]
+[INFO] ------------------------< com.example:tutorial >------------------------
+[INFO] Building tutorial 0.0.1-SNAPSHOT
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- maven-resources-plugin:3.1.0:resources (default-resources) @ tutorial ---
+[INFO] Using 'UTF-8' encoding to copy filtered resources.
+[INFO] Copying 1 resource
+[INFO] Copying 1 resource
+[INFO]
+[INFO] --- maven-compiler-plugin:3.8.1:compile (default-compile) @ tutorial ---
+[INFO] Changes detected - recompiling the module!
+[INFO] Compiling 9 source files to C:\xxx\tutorial\target\classes
+[INFO]
+[INFO] --- maven-resources-plugin:3.1.0:testResources (default-testResources) @ tutorial ---
+[INFO] Using 'UTF-8' encoding to copy filtered resources.
+[INFO] Copying 1 resource
+[INFO]
+[INFO] --- maven-compiler-plugin:3.8.1:testCompile (default-testCompile) @ tutorial ---
+[INFO] Changes detected - recompiling the module!
+[INFO] Compiling 4 source files to C:\xxx\tutorial\target\test-classes
+[INFO]
+[INFO] --- maven-surefire-plugin:2.22.2:test (default-test) @ tutorial ---
+[INFO]
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.example.tutorial.todo.TodoControllerTest
+
+... (omitted)
+
+[INFO]
+[INFO] Results:
+[INFO]
+[INFO] Tests run: 17, Failures: 0, Errors: 0, Skipped: 0
+[INFO]
+[INFO]
+[INFO] --- maven-jar-plugin:3.1.2:jar (default-jar) @ tutorial ---
+[INFO] Building jar: C:\xxx\tutorial\target\tutorial-0.0.1-SNAPSHOT.jar
+[INFO]
+[INFO] --- spring-boot-maven-plugin:2.2.0.RELEASE:repackage (repackage) @ tutorial ---
+[INFO] Replacing main artifact with repackaged archive
+[INFO]
+[INFO] --- spring-boot-maven-plugin:2.2.0.RELEASE:repackage (default) @ tutorial ---
+[INFO] Replacing main artifact with repackaged archive
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  13.555 s
+[INFO] Finished at: 2019-11-06T19:48:07+09:00
+[INFO] ------------------------------------------------------------------------
+
+
+----
+
+[[Run_jar]]
+=== {EJ}ファイルの実行
+作成した{EJ}ファイルを実行するために、下記のコマンドを実行する。
+
+[source, command]
+.{EJ}ファイルの実行(Unix系ターミナル)
+----
+$ cd /C/xxx/tutorial/target
+$ java -jar tutorial-0.0.1-SNAPSHOT.jar
+----
+
+[source, command]
+.{EJ}ファイルの実行(Windowsコマンドプロンプト)
+----
+C:> cd C:\xxx\tutorial\target
+C:\xxx\tutorial\target> java -jar tutorial-0.0.1-SNAPSHOT.jar
+----
+
+コマンドを実行すると、コンソール上に以下のようなログが表示される。
+[source, console]
+.console
+----
+$ java -jar tutorial-0.0.1-SNAPSHOT.jar
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::        (v2.2.0.RELEASE)
+
+2019-11-06 19:52:59.796  INFO 19024 --- [           main] c.example.tutorial.TutorialApplication   : Starting TutorialApplication v0.0.1-SNAPSHOT on *** with PID 19024 (C:\xxx\tutorial\target\tutorial-0.0.1-SNAPSHOT.jar started by *** in C:\xxx\tutorial\target)
+2019-11-06 19:52:59.796  INFO 19024 --- [           main] c.example.tutorial.TutorialApplication   : No active profile set, falling back to default profiles: default
+2019-11-06 19:53:01.136  INFO 19024 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port(s): 8080 (http)
+2019-11-06 19:53:01.167  INFO 19024 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2019-11-06 19:53:01.167  INFO 19024 --- [           main] org.apache.catalina.core.StandardEngine  : Starting Servlet engine: [Apache Tomcat/9.0.27]
+2019-11-06 19:53:01.261  INFO 19024 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2019-11-06 19:53:01.261  INFO 19024 --- [           main] o.s.web.context.ContextLoader            : Root WebApplicationContext: initialization completed in 1418 ms
+2019-11-06 19:53:01.440  INFO 19024 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2019-11-06 19:53:01.659  INFO 19024 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2019-11-06 19:53:01.831  INFO 19024 --- [           main] c.g.d.core.DozerBeanMapperBuilder        : Initializing Dozer. Version: 6.5.0, Thread Name: main
+2019-11-06 19:53:01.831  INFO 19024 --- [           main] c.g.dozermapper.core.util.RuntimeUtils   : OSGi support is false
+2019-11-06 19:53:01.831  INFO 19024 --- [           main] d.c.c.r.LegacyPropertiesSettingsResolver : Trying to find Dozer configuration file: dozer.properties
+2019-11-06 19:53:01.846  INFO 19024 --- [           main] d.c.c.r.LegacyPropertiesSettingsResolver : Failed to find dozer.properties via com.github.dozermapper.core.config.resolvers.LegacyPropertiesSettingsResolver.
+2019-11-06 19:53:01.846  WARN 19024 --- [           main] c.g.d.core.el.ELExpressionFactory        : javax.el is not supported; Failed to resolve ExpressionFactory, com.sun.el.ExpressionFactoryImpl
+2019-11-06 19:53:02.034  INFO 19024 --- [           main] o.s.s.concurrent.ThreadPoolTaskExecutor  : Initializing ExecutorService 'applicationTaskExecutor'
+2019-11-06 19:53:02.274  INFO 19024 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port(s): 8080 (http) with context path ''
+2019-11-06 19:53:02.274  INFO 19024 --- [           main] c.example.tutorial.TutorialApplication   : Started TutorialApplication in 3.024 seconds (JVM running for 3.548)
+
+----
+
+アプリケーションは``Ctrl + c``で停止できる。
+
+[[Run_Client]]
+=== REST API Clientによる動作確認
+上記で作成したアプリケーションを実行し、実装したREST APIの動作を確認する。
+
+[[Run_Client_GetTodos]]
+==== GET Todos
+REST API(Get Todos)にアクセスする。 +
+DHCを開いてURLに``http://localhost:8080/todos``を入力し、メソッドにGETを指定して、”Send”ボタンをクリックする。
+
+[NOTE]
+.ポート番号を変更している場合
+====
+Tomcatがデフォルトで使用するポート番号(8080)からポート番号を変更している場合は、変更後のポート番号に読み替えること。
+====
+
+image::Tutorial/SetupGETTodos.png[Setup GET Todos]
+
+以下のように「Response」の「BODY」に実行結果のJSONが表示される。 +
+現時点ではデータが何も登録されていないため、空配列である``[]``が返却される。
+
+image::Tutorial/RunGETTodos1.png[Run GET Todos]
+
+[[Run_Client_PostTodo]]
+==== POST Todo
+``http://localhost:8080/todos``を入力し、メソッドにPOSTを指定する。 +
+「BODY」に以下のJSONを入力する。
+
+[source, json]
+.BODY
+----
+{
+  "todoTitle": "Hello World!"
+}
+----
+
+また、「HEADERS」の「+Add header」ボタンでHTTPヘッダーを追加し、「Content-Type」に「application/json」を設定後、”Send”ボタンをクリックする。
+
+image::Tutorial/SetupPOSTTodo.png[Setup PUST Todos]
+
+{HSC}``201``(Created)が返却され、「Response」の「BODY」に新規作成されたTodoリソースのJSONが表示される。
+
+image::Tutorial/RunPOSTTodo.png[Run PUST Todos]
+
+この状態で再びGET Todosを実行すると、作成したTodoリソースを含む配列が返却される。
+
+image::Tutorial/RunGETTodos2.png[Run GET Todos]
+
+[[Run_Client_GetTodo]]
+==== GET Todo
+``http://localhost:8080/todos/{todoId}``を入力し、メソッドにGETを指定する。 +
+``{todoId}``の部分に実際のIDを入力後、”Send”ボタンをクリックする。
+
+image::Tutorial/SetupGETTodo.png[Setup GET Todo]
+
+{HSC}``200``(OK)が返却され、「Response」の「BODY」に指定したTodoリソースのJSONが表示される。
+
+image::Tutorial/RunGETTodo.png[Run GET Todo]
+
+[[Run_Client_PutTodo]]
+==== PUT Todo
+``http://localhost:8080/todos/{todoId}``を入力し、メソッドにPUTを指定する。 +
+``{todoId}``の部分に実際のIDを入力後、”Send”ボタンをクリックする。
+
+image::Tutorial/SetupPUTTodo.png[Setup PUT Todo]
+
+{HSC}``200``(OK)が返却され、「Response」の「BODY」に更新されたTodoリソースのJSONが表示される。
+
+``finished``が``true``に更新されている。
+
+image::Tutorial/RunPUTTodo.png[Run PUT Todo]
+
+[[Run_Client_DeleteTodo]]
+==== DELETE Todo
+``http://localhost:8080/todos/{todoId}``を入力し、メソッドにDELETEを指定する。 +
+``{todoId}``の部分に実際のIDを入力後、”Send”ボタンをクリックする。
+
+image::Tutorial/SetupDELETETodo.png[Setup DELETE Todo]
+
+{HSC}``204``(No Content)が返却され、「Response」の「BODY」は空である。
+
+image::Tutorial/RunDELETETodo.png[Run DELETE Todo]
+
+この状態で再びGET Todosを実行すると、Todoリソースが削除されていることが確認できる。
+
+image::Tutorial/RunGETTodos3.png[Run GET Todos]
+
+[[Conclusion]]
+== おわりに
+本チュートリアルでは、下記の内容を学習した。
+
+* {SB}による基本的なRESTful Webサービスの構築方法
+* {SB}によるJUnitを使用した基本的なテストの開発方法
+* MavenおよびSTS(Eclipse)プロジェクトの構築方法
+
+また、簡単なアプリケーション開発を通して、{SB}の下記の特徴を体験した。
+
+* {SI}を使用することで、簡単にアプリケーション開発が開始できること
+** <<Create_Project>>
+* {SBA}によって、アプリケーションの設定(Bean定義、ログの定義、Servletの設定など)が不要になり、開発者が設定を記述する作業が削減したこと
+** <<Initial_Setting>>
+* 開発には変わらず{SF}を使用するため、必要となる知識や実装内容は変わらないこと
+** <<Create_Repository>>
+** <<Create_Service>>
+** <<Create_Controller>>
+* 簡単な設定のみでアプリケーションの単体テスト/結合テストが実装できること
+** <<Test_Repository>>
+** <<Test_Service>>
+** <<Test_Controller>>
+* アプリケーションサーバのセットアップやアプリケーションのデプロイ作業が不要なこと
+** <<Run_App>>
+* {ES}で起動するアプリケーションが{EJ}形式でパッケージングされるためリリース手順が簡略化されること
+** <<Create_jar>>
+
+ifeval::["{docname}" != "single_index"]
+{SB}の機能等について理解を深める為には、<<function_index.adoc#function,機能紹介>>や {reference_url}[{SB}の公式リファレンス] を参照すること。
+endif::[]
+
+ifeval::["{docname}" == "single_index"]
+{SB}の機能等について理解を深める為には、<<function,機能紹介>>や {reference_url}[{SB}の公式リファレンス] を参照すること。
+endif::[]

@@ -1,0 +1,1415 @@
+include::_include_all.adoc[]
+
+:sectnums: 4
+:toclevels: 6
+
+[[Architecture]]
+= {SB}の主要な機能
+
+ここでは{SB}の主要な機能について説明する。
+
+{SB}には便利な機能が用意されているが、トラブル発生時には{SB}の仕組みを理解していないと対応が難しい側面がある。そのため、一部で実装面に踏み込んだ説明も含まれていることに留意すること。
+
+[[Architecture_AutoConfiguration]]
+== {SBA}
+
+{SB}を使用すると多くの設定(Bean定義)が自動で行なわれる。
+そのため、開発者は最小限の設定を行うだけで、Springアプリケーションの構築を開始できる。 +
+この{SB}が行う自動設定の仕組みを「{SBA}」と呼ぶ。
+
+{SBA}によってSpringアプリケーション開発における次の2つの問題が解決される。
+
+* 設定が煩雑で難しいため、どのような設定をすればよいのかわからない
+* 小規模なアプリケーションの開発においても最初のセットアップが大変である
+
+以降では、{SBA}について下記の流れで説明する。
+
+* <<Architecture_AutoConfiguration_Settings>>
+* <<Architecture_AutoConfiguration_ConfigurationClasses>>
+* <<Architecture_AutoConfiguration_Control>>
+* <<Architecture_AutoConfiguration_AutoConfigureProject>>
+
+[[Architecture_AutoConfiguration_Settings]]
+=== {SBA}を有効にするための設定
+
+{SBA}は、``@SpringBootApplication``を付与したクラスを``SpringApplication.run()``の第一引数に指定して実行することで有効となる。
+
+{SBA}はまずアプリケーション起動時に、{SB}が予め推奨設定(Bean定義)を定義しているAutoConfigure用のコンフィギュレーションクラス({AC}クラス)をインポートする。その後、インポートしたコンフィギュレーションクラスの定義に従ってBean定義を行う。
+
+{SI}にて生成した{SB}プロジェクトのメインクラスを例に実装例を示す。 +
+{SI}については<<Architecture_SpringInitializr>>にて説明する。
+
+[source,java]
+.{SI}にて生成した{SB}プロジェクトのメインクラス
+----
+package com.example.demo;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication  // (1)
+public class DemoApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(DemoApplication.class, args);  // (2)
+    }
+
+}
+
+----
+
+[cols="10,90a", options="header"]
+.説明
+|===
+|項番
+|説明
+
+|(1)
+|``@SpringBootApplication``を付与する。
+
+|(2)
+|``@SpringBootApplication``を付与したクラスを``SpringApplication.run()``の第一引数に指定する。
+|===
+
+{SBA}やスキャンの設定が有効となるのは、``@SpringBootApplication``が複数のアノテーションを含んでいるためである。 +
+``@SpringBootApplication``の構造を下記に示す。
+
+[source,java]
+.org.springframework.boot.autoconfigure.SpringBootApplication.java
+----
+package org.springframework.boot.autoconfigure;
+
+// omitted
+
+@SpringBootConfiguration // (1)
+@EnableAutoConfiguration // (2)
+@ComponentScan(excludeFilters = { @Filter(type = FilterType.CUSTOM, classes = TypeExcludeFilter.class),
+    @Filter(type = FilterType.CUSTOM, classes = AutoConfigurationExcludeFilter.class) }) // (3)
+@ConfigurationPropertiesScan // (4)
+public @interface SpringBootApplication {
+    // omitted
+}
+----
+
+[cols="10,90a", options="header"]
+.説明
+|===
+|項番
+|説明
+
+|(1)
+|内部に``@Configuration``を含み、メインクラスがコンフィギュレーションクラスとする。
+
+|(2)
+|{SBA}を有効化する。
+
+|(3)
+|デフォルトパッケージ配下の``@Component``をスキャンする。
+
+|(4)
+|デフォルトパッケージ配下の``@ConfigurationProperties``をスキャンする。
+|===
+
+[[Architecture_AutoConfiguration_Settings_workings]]
+[IMPORTANT]
+.{SB}が{SBA}を実行する仕組み
+====
+上記では、``@SpringBootApplication``を付与したクラスを``SpringApplication.run()``の第一引数に指定することで{SBA}が実行されると説明した。
+しかし、厳密には``@SpringBootApplication``の内部に含まれる``@EnableAutoConfiguration``と``@Configuration``(``@SpringBootConfiguration``に含まれている)の存在を{SB}が判定し、{SBA}を実行している。
+
+image::Architecture/Architecture_AutoConfiguration_Settings_workings.png[{SBA} Architecture,795]
+
+``@SpringBootApplication``に含まれている他のアノテーションは、コンポーネントスキャンなど通常のアプリケーション開発で使用する設定である。
+そのため、通常は``@SpringBootApplication``を使用すればよい。
+====
+
+[[Architecture_AutoConfiguration_ConfigurationClasses]]
+=== 読み込まれる{AC}クラス
+
+読み込まれる{AC}クラスは、``AutoConfigurationImportSelector.class``によって決定される。
+``AutoConfigurationImportSelector.class``は``@EnableAutoConfiguration``内部の定義でインポートされているクラスである。
+
+デフォルトの``AutoConfigurationImportSelector.class``実装ではクラスパス上の``/META-INF/spring.factories``から取得される。
+
+image::Architecture/Architecture_AutoConfiguration_ConfigurationClasses.png[{AC} classes]
+
+{github_url}spring-boot-project/spring-boot-autoconfigure/src/main/resources/META-INF/spring.factories[``/META-INF/spring.factories``] の定義は下記のようになっている。 +
+様々なSpringプロジェクトやライブラリの{AC}クラスが読み込み対象になっていることがわかる。
+
+[source, console]
+./META-INF/spring.factories
+----
+# omitted
+
+# Auto Configure
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+org.springframework.boot.autoconfigure.admin.SpringApplicationAdminJmxAutoConfiguration,\
+org.springframework.boot.autoconfigure.aop.AopAutoConfiguration,\
+org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration,\
+org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration,\
+org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration,\
+org.springframework.boot.autoconfigure.cassandra.CassandraAutoConfiguration,\
+org.springframework.boot.autoconfigure.cloud.CloudServiceConnectorsAutoConfiguration,\
+org.springframework.boot.autoconfigure.context.ConfigurationPropertiesAutoConfiguration,\
+org.springframework.boot.autoconfigure.context.MessageSourceAutoConfiguration,\
+org.springframework.boot.autoconfigure.context.PropertyPlaceholderAutoConfiguration,\
+org.springframework.boot.autoconfigure.couchbase.CouchbaseAutoConfiguration,\
+org.springframework.boot.autoconfigure.dao.PersistenceExceptionTranslationAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.cassandra.CassandraDataAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.cassandra.CassandraReactiveDataAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.cassandra.CassandraReactiveRepositoriesAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.cassandra.CassandraRepositoriesAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.couchbase.CouchbaseDataAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.couchbase.CouchbaseReactiveDataAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.couchbase.CouchbaseReactiveRepositoriesAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.couchbase.CouchbaseRepositoriesAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.elasticsearch.ElasticsearchAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.elasticsearch.ElasticsearchDataAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.elasticsearch.ElasticsearchRepositoriesAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.elasticsearch.ReactiveElasticsearchRepositoriesAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.elasticsearch.ReactiveRestClientAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.jdbc.JdbcRepositoriesAutoConfiguration,\
+org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration,\
+
+# omitted
+----
+
+[NOTE]
+.読み込まれたコンフィギュレーションとBean生成情報の出力
+====
+
+{SBA}によって読み込まれたコンフィギュレーションとBean生成情報は実行時引数に``--debug``を付与することで出力可能である。
+
+出力例を下記に示す。
+
+[source, console]
+.console
+----
+$ java -jar target/demo-0.0.1-SNAPSHOT.jar --debug
+# omitted
+
+YYYY-MM-DD hh:mm:ss.SSS DEBUG PID --- [           main] ConditionEvaluationReportLoggingListener :
+
+CONDITIONS EVALUATION REPORT
+
+
+Positive matches:
+-----------------
+
+   DispatcherServletAutoConfiguration matched:
+      - @ConditionalOnClass found required class 'org.springframework.web.servlet.DispatcherServlet' (OnClassCondition)
+      - found 'session' scope (OnWebApplicationCondition)
+
+   DispatcherServletAutoConfiguration.DispatcherServletConfiguration matched:
+      - @ConditionalOnClass found required class 'javax.servlet.ServletRegistration' (OnClassCondition)
+      - Default DispatcherServlet did not find dispatcher servlet beans (DispatcherServletAutoConfiguration.DefaultDispatcherServletCondition)
+
+   DispatcherServletAutoConfiguration.DispatcherServletRegistrationConfiguration matched:
+      - @ConditionalOnClass found required class 'javax.servlet.ServletRegistration' (OnClassCondition)
+      - DispatcherServlet Registration did not find servlet registration bean (DispatcherServletAutoConfiguration.DispatcherServletRegistrationCondition)
+
+   DispatcherServletAutoConfiguration.DispatcherServletRegistrationConfiguration#dispatcherServletRegistration matched:
+      - @ConditionalOnBean (names: dispatcherServlettypes: org.springframework.web.servlet.DispatcherServlet; SearchStrategy: all) found bean 'dispatcherServlet' (OnBeanCondition)
+
+   EmbeddedWebServerFactoryCustomizerAutoConfiguration matched:
+      - @ConditionalOnWebApplication (required) found 'session' scope (OnWebApplicationCondition)
+
+   EmbeddedWebServerFactoryCustomizerAutoConfiguration.TomcatWebServerFactoryCustomizerConfiguration matched:
+      - @ConditionalOnClass found required classes 'org.apache.catalina.startup.Tomcat', 'org.apache.coyote.UpgradeProtocol' (OnClassCondition)
+
+# omitted
+----
+
+====
+
+[[Architecture_AutoConfiguration_Control]]
+=== {SBA}の制御
+
+<<Architecture_AutoConfiguration_ConfigurationClasses>>にて読み込み対象となる{AC}クラスには多数のBeanが定義されている。
+これらのBeanは、定義された順序で{AC}クラスが読み込まれ、依存ライブラリや既に存在するBeanの情報などを基に条件に合致したもののみ生成される。
+
+{AC}クラスを適用する順番の制御やBeanを生成する条件は、{AC}クラスに付与されたアノテーションによって制御されている。
+
+Beanの自動生成を制御するアノテーションは下記の2つに分類される。
+
+* <<Architecture_AutoConfiguration_Control_Order>>
+* <<Architecture_AutoConfiguration_Control_Condition>>
+
+[[Architecture_AutoConfiguration_Control_Order]]
+==== 設定の適用順序を指定するアノテーション
+
+{AC}クラスを適用する順番は、``@AutoConfigureXxxx``で制御している。
+
+下記のようなアノテーションが提供されており、適用順序を判断して自動設定をするために用いられている。 +
+ただし、独自に定義したBeanがある場合、{AC}で生成したBeanより優先して適用される。
+
+[cols="30,70"]
+.{AC}クラスの適用順序を指定するアノテーション
+|===
+|アノテーション
+|説明
+
+|@AutoConfigureBefore
+|指定した{AC}クラスよりも先に適用する。
+
+|@AutoConfigureAfter
+|指定した{AC}クラスよりも後に適用する。
+
+|@AutoConfigureOrder
+|指定された数値が小さい{AC}クラスを先に適用する。 +
+数値にて優先度を指定することで他の{AC}クラスと相互に順序付けを行うことができる。
+|===
+
+他の{AC}クラスで行うBean定義との依存関係がある場合、これらのアノテーションを使用してBean定義の順序性を担保するために用いられている。
+
+``DispatcherServletAutoConfiguration``クラスでは``@AutoConfigureOrder``と``@AutoConfigureAfter``によって適用順序が設定されている。下記の設定では、優先度は「最高」で、``ServletWebServerFactoryAutoConfiguration``クラスよりも後に読み込まれる。
+
+[source,java]
+.DispatcherServletAutoConfiguration.java
+----
+package org.springframework.boot.autoconfigure.web.servlet;
+
+// omitted
+
+@AutoConfigureOrder(Ordered.HIGHEST_PRECEDENCE)
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnWebApplication(type = Type.SERVLET)
+@ConditionalOnClass(DispatcherServlet.class)
+@AutoConfigureAfter(ServletWebServerFactoryAutoConfiguration.class)
+public class DispatcherServletAutoConfiguration {
+
+    // omitted
+
+}
+----
+
+[[Architecture_AutoConfiguration_Control_Condition]]
+==== 設定の適用条件を指定するアノテーション
+
+{AC}クラス適用およびBean生成の条件は、``@Conditional``の合成アノテーション``@ConditionalOnXxxx``で制御している。
+
+下記のようなアノテーションが提供されており、様々な条件を判断して自動設定をするために用いられている。
+
+[cols="30,70"]
+.{AC}クラスの適用およびBean生成の条件を指定するアノテーション
+|===
+|アノテーション
+|説明
+
+|@ConditionalOnClass
+|指定したクラスがクラスパス上に存在する場合に適用される。
+
+|@ConditionalOnMissingClass
+|指定したクラスがクラスパス上に存在しない場合に適用される。
+
+|@ConditionalOnBean
+|指定した型や名前のBeanがDIコンテナ上に存在する場合に適用される。
+
+|@ConditionalOnMissingBean
+|指定した型や名前のBeanがDIコンテナ上に存在しない場合に適用される。
+
+|@ConditionalOnSingleCandidate
+|指定した型や名前のBeanがDIコンテナ上に1つ(or @Primaryが付与されたBeanが1つ)存在している場合に適用される。
+
+|@ConditionalOnExpression
+|指定したSpELの評価結果がtrueになる場合に適用される。
+
+|@ConditionalOnProperty
+|設定値が指定した値と一致する場合に適用される。なお、プロパティが未定義の場合に適用対象とするか否かは、アノテーションの属性値で指定することができる。
+
+|@ConditionalOnResource
+|指定したリソース(ファイルなど)が存在する場合に適用される。
+
+|@ConditionalOnWebApplication
+|Webアプリケーション環境で動作している場合に適用される。
+
+|@ConditionalOnNotWebApplication
+|Webアプリケーション環境で動作していない場合に適用される。
+|===
+
+多くの{AC}クラスには``@ConditionalOnClass``が付与されており、これによって依存ライブラリに数多く読み込まれる{AC}クラスの中から自動設定を適用している。
+
+たとえば、``DispatcherServletAutoConfiguration``クラスでは``@ConditionalOnClass``に``{DS}``が設定されている。そのため、spring-webmvcを依存ライブラリに含めるだけで設定が反映される。
+
+[source,java]
+.DispatcherServletAutoConfiguration.java
+----
+package org.springframework.boot.autoconfigure.web.servlet;
+
+// omitted
+
+@AutoConfigureOrder(Ordered.HIGHEST_PRECEDENCE)
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnWebApplication(type = Type.SERVLET)
+@ConditionalOnClass(DispatcherServlet.class)
+@AutoConfigureAfter(ServletWebServerFactoryAutoConfiguration.class)
+public class DispatcherServletAutoConfiguration {
+
+    // omitted
+
+}
+----
+
+[NOTE]
+.Starterによる依存ライブラリの解決
+====
+上記でspring-webmvcを依存ライブラリに含めるだけで設定が反映されると説明したが、実際の開発ではStarterと呼ばれる機能を使用する。
+
+Starterの詳細については、<<Architecture_Starter>>にて説明する。
+====
+
+[[Architecture_AutoConfiguration_AutoConfigureProject]]
+=== 様々なspring-boot-autoconfigureプロジェクト
+
+{SB}では、下記に挙げているような、さまざまな機能の{AC}クラスが用意されている。 +
+自動設定の詳細を知りたい場合は {github_url}spring-boot-project/spring-boot-autoconfigure/src/main/java/org/springframework/boot/autoconfigure[spring-boot-autoconfigureプロジェクト] に格納されている{AC}クラスのソースを読むこと。
+
+[cols="33,33,34"]
+.spring-boot-autoconfigureプロジェクトの例
+|===
+| Cache
+| Cassandra
+| Elasticsearch
+
+| Email
+| Flyway
+| FreeMarker
+
+| JMX
+| Jetty
+| Logging
+
+| MongoDB
+| Redis
+| Spring Batch
+
+| Spring Data JPA
+| Spring MVC
+| Spring Security
+
+| Thymeleaf
+| Tomcat
+| Undertow
+
+| WebSocket
+|
+|
+|===
+
+[TIP]
+.{AC}について
+====
+{SB}から提供されている{AC}以外にも、サードパーティから提供されている{AC}も存在する。必要に応じて独自の{AC}を作成することもできる。
+====
+
+[[Architecture_AutoConfiguration_Customization]]
+=== {SBA}のカスタマイズ
+
+{SBA}は、{SB}が提供するオススメの設定を反映するため開発者が設定を記述することなくデフォルトの状態でさまざまな機能を利用できる。
+
+しかし、下記のように開発するアプリケーションによって設定をカスタマイズしたい場合が考えられる。
+
+* サーバのHTTPポートやJDBCの接続先など、デフォルト値を使用せず使用するライブラリや環境によって値を設定する場合
+* 特定のBeanの実装を独自で定義したBeanに差し替える場合
+* 各環境で設定値を切り替える場合
+
+{SB}では、このような場合に対応するために{SBA}の設定をカスタマイズするために、下記の3つの方法を提供している。
+
+プロパティ定義によるカスタマイズ::
+{SBCF}に{SB}で用意されているプロパティを定義することで、{SBA}で生成されるBeanの設定を変更することができる。
+
+Bean定義によるカスタマイズ::
+Beanを定義したクラスを作成することで、{SBA}で生成されるBean定義の上書きや追加をすることができる。
+
+一部の{AC}を無効にする::
+{SBCF}やアノテーションの属性に{AC}対象外にしたい{AC}を指定するだけで、一部の{AC}を無効にすることができる。
+
+以降では、それぞれの設定方法の詳細について説明する。
+
+* <<Architecture_AutoConfiguration_Customization_Property>>
+* <<Architecture_AutoConfiguration_Customization_Configuration>>
+* <<Architecture_AutoConfiguration_Exclude_specific_AutoConfiguration>>
+
+[[Architecture_AutoConfiguration_Customization_Property]]
+==== プロパティ定義によるカスタマイズ
+
+{SB}では、設定ファイルに{SB}で用意されているプロパティを定義することで、{SBA}で生成されるBeanの設定を変更することができる。 +
+従来の{SF}を用いたアプリケーション開発では各機能別に設定ファイルが必要だったが、{SB}では設定ファイルを介してアプリケーションの設定の一元管理が可能になっている。
+
+{SBCF}は、下記の2種類の形式を使用することができる。
+
+ * property形式(application.properties)
+ * YAML形式(application.yml)
+
+YAML形式はproperty形式と比較して、プロパティを構造化して表現することができる、日本語を使用する際にnative2asciiのようなコード変換が不要といったメリットがあるため、
+{GL}ではYAML形式(application.yml)で説明することとする。
+
+実際のプロパティ定義例を下記に示す。 +
+application.ymlに下記のように設定すると、Webサーバをポート番号8088で起動(デフォルトは8080)させることができる。
+
+[source,yaml]
+.application.yml
+----
+# Server settings.
+server:
+  port:
+    8088
+----
+
+{SB}でのアプリケーション開発において、アプリケーションの動作をカスタマイズしたい場合は、独自でBean定義を行う前にapplication.propertiesを介してアプリケーションの設定を行うことができるか確認すること。 +
+{SB}で用意されているプロパティの一覧は、 {reference_url}#common-application-properties[{SB}の公式リファレンス] を参照すること。
+
+[NOTE]
+.プロパティ定義によるカスタマイズの仕組み
+====
+プロパティ定義によるカスタマイズは、{SB}が提供する``@ConfigurationProperties``を用いて実現されている。
+``@ConfigurationProperties``を使用すると、プロパティファイルへの定義をBeanにバインディングすることができるため、タイプセーフにプロパティにアクセスすることができる。 +
+``@ConfigurationProperties``についての詳細は<<PropertyManagement.adoc#Ch05_PropertyManagemant,プロパティ管理>>を参照すること。
+
+また、server.portプロパティのような{SB}から提供されているプロパティについても、上記と同様の仕組みで実現されている。
+====
+
+[TIP]
+.プロパティを実行時に指定する
+====
+プロパティは実行時にコマンドライン引数(起動時のコマンドに``--"キー"="値"``を付与)や環境変数で指定できるため、実行時にアプリケーションの動作を柔軟に変更することができる。
+====
+
+[[Architecture_AutoConfiguration_Customization_Configuration]]
+==== Bean定義のカスタマイズ
+
+Beanを定義したクラスを作成することで、{SBA}で生成されるBean定義の上書きや追加をすることができる。
+Bean定義を作成する場合は、自作のBean定義クラスをルートパッケージ配下の任意のパッケージに配置するだけでよい。
+
+Bean定義をカスタマイズする方法としては、下記の3種類が存在する。
+
+独自のBean定義による既存Bean定義の上書き::
+{AC}内のBean定義のうち、``@ConditionalOnMissingBean``アノテーションが設定されているBean定義は、
+独自のBean定義を作成することで元のBean定義を上書きできる。
+
+独自のBean定義を優先して読み込む::
+{AC}内のBean定義のうち、``@ConditionalOnSingleCandidate``アノテーションが設定されているBean定義は、
+``@Primary``アノテーションを付与した独自のBean定義を作成することで、独自のBean定義が優先して読み込まれるようになる。
+
+{AC} Beanのカスタマイズ::
+``…​Customizer``や``…​Configurer``クラスを実装したクラスをBean定義することで、{AC}で読み込まれるBean定義を上書きできる。
+
+[NOTE]
+.Bean定義クラスを配置するパッケージについて
+====
+{SI}で作成したプロジェクトではルートパッケージがコンポーネントスキャン対象になっているため、Bean定義クラスはルートパッケージ配下の任意のパッケージに配置すればよい。
+
+{SI}で作成したプロジェクトについては、<<Architecture_SpringInitializr_Project,{SI}による{SB}プロジェクトの作成の生成されるプロジェクトの構成>>にて説明する。
+====
+
+[[Architecture_AutoConfiguration_Exclude_specific_AutoConfiguration]]
+==== 一部の{AC}を無効にする
+
+{SB}では下記の2つの方法で、一部の{AC}を無効にすることができる。
+
+{SBCF}に無効にする{AC}クラスを指定する方法::
+``spring.autoconfigure.exclude``プロパティに{AC}対象から除外したい{AC}クラスを指定することで、指定した{AC}クラスを無効にすることができる。
+
+@SpringBootApplicationのexclude属性を指定する方法::
+``@SpringBootApplication``アノテーションの``exclude``属性に{AC}対象から除外したい{AC}クラスを指定することで、指定した{AC}クラスを無効にすることができる。
+
+[[Architecture_Starter]]
+== Starterによる依存ライブラリの解決
+
+{SB}にはStarterという依存ライブラリの解決を容易に行うための仕組みがある。Starterは、機能を実現するために必要なライブラリの依存関係を集約したものである。各機能に対して{SBS}-xxxxxという名前でStarterは提供されており依存ライブラリに追加するだけで使用できる。
+
+StarterによってSpringアプリケーション開発における次の2つの問題が解決される。
+
+* 各プロジェクトおよびライブラリをどう組み合わせてよいのかわからない
+* どのライブラリのどのバージョンを使えばよいかわからない
+
+必要な機能に対応したStarterを依存ライブラリに追加することで、必要なライブラリが追加され、{AC}の``@ConditionalOnClass``が次々と有効になってその機能が設定なしで利用できるようになる。
+
+image::Architecture/Architecture_Starter.png[Starter architecture]
+
+例えば、アプリケーションのpom.xmlに {github_url}spring-boot-project/spring-boot-starters/spring-boot-starter-web/pom.xml[spring-boot-starter-web] への依存関係を定義するだけで、下記の依存関係が解決される。
+
+* {SB}
+* Spring MVC
+* Tomcat
+* Bean Validation（Hibernate Validator）
+* Jackson
+* SLF4J＋Logback
+
+[source, xml]
+.{SBSW}の定義例
+----
+    <!-- omitted -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <!-- omitted -->
+----
+
+この場合``<version>``の指定は不要であり、各依存ライブラリのバージョンは親pomである{SBS}-parentに定義されている。 +
+{SBS}-parentの定義例は下記の通り。
+
+[source, xml]
+.{SBS}-parentの定義例
+----
+    <!-- omitted -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.2.0.RELEASE</version>
+        <relativePath />
+    </parent>
+    <!-- omitted -->
+----
+
+{SBS}-parentに指定するバージョンがアプリケーションで使用する{SB}のバージョンになる。
+
+{SB}は{SI}という{SB}プロジェクトを生成するWebサービスを提供しており、これらの依存ライブラリの設定を行ったプロジェクトを容易に作成することを可能にしている。
+{SI}については<<Architecture_SpringInitializr>>にて説明する。
+
+Starterもspring-boot-autoconfigureプロジェクトと同様に多数用意されている。 +
+また、下記以外にもMyBatis等のサードパーティ製のライブラリを使用するためのStarterが提供されていることがあり、Springが提供するものと同様に使用可能である。
+
+[cols="33,33,33"]
+.{SBS}プロジェクトの例
+|===
+|spring-boot-starter-actuator
+|spring-boot-starter-aop
+|spring-boot-starter-batch
+
+|spring-boot-starter-cache
+|spring-boot-starter-cloud-connectors
+|spring-boot-starter-data-jdbc
+
+|spring-boot-starter-data-jpa
+|spring-boot-starter-data-mongodb
+|spring-boot-starter-data-rest
+
+|spring-boot-starter-freemarker
+|spring-boot-starter-groovy-templates
+|spring-boot-starter-hateoas
+
+|spring-boot-starter-integration
+|spring-boot-starter-jdbc
+|spring-boot-starter-jetty
+
+|spring-boot-starter-jooq
+|spring-boot-starter-json
+|spring-boot-starter-jta-atomikos
+
+|spring-boot-starter-jta-bitronix
+|spring-boot-starter-log4j2
+|spring-boot-starter-logging
+
+|spring-boot-starter-oauth2-client
+|spring-boot-starter-oauth2-resource-server
+|spring-boot-starter-data-redis
+
+|spring-boot-starter-security
+|spring-boot-starter-test
+|spring-boot-starter-thymeleaf
+
+|spring-boot-starter-tomcat
+|spring-boot-starter-validation
+|spring-boot-starter-web
+|===
+
+[TIP]
+.独自のStarterについて
+====
+{GL}では詳しく説明はしないが、共通ライブラリや商用ライブラリを開発するような場合に、独自のStarterを作成することができる。
+作成したStarterは、{SB}やサードパーティから提供されているStarterと同様に、pom.xml上に依存関係を定義することで使用できる。
+====
+
+[[Architecture_SpringInitializr]]
+== {SI}による{SB}プロジェクトの作成
+
+{SI}とは、パッケージ構成、依存ライブラリ、プラグインなどの設定を行った{SB}プロジェクトを生成することができるWebサービスである。
+
+{SI}にて生成した{SB}プロジェクトは、{SBA}や{EJ}形式でのパッケージング等の{SB}が提供する一連の機能が有効になるように設定されている。
+そのため、アプリケーション開発者が設定を行うことなく、簡単にアプリケーション開発を開始することができる。
+
+{SI}は、Webサービスとして提供されており、下記の形式でサービスにアクセスして{SB}プロジェクトを生成することができる。
+
+* Web UI
+* IDE(Eclipse/STS、IntelliJ IDEA Ultimate Edition、NetBeans)
+* コマンドライン({SB}が提供する{SBC}、cURLコマンド、HTTPieコマンド等)
+
+{GL}では、Web UIにて{SB}プロジェクトを生成する方法について説明する。 +
+その他のプロジェクト生成方法については、 {si_reference_url}[{SI}の公式リファレンス] を参照すること。
+
+以降では、{SI}について下記の流れで説明する。
+
+* <<Architecture_SpringInitializr_HowToUse>>
+* <<Architecture_SpringInitializr_Project>>
+
+[[Architecture_SpringInitializr_HowToUse]]
+=== {SI}の使い方
+
+ブラウザを起動し{SI}( https://start.spring.io )にアクセスすると下記のような{SB}プロジェクト生成画面が表示される。
+
+image::Architecture/Architecture_SpringInitializr_HowToUse_InitDisp.png[{SI}]
+
+作成する{SB}プロジェクトの情報を選択/入力し、"Generate-Ctrl+⏎"ボタンを押下すると、プロジェクトが生成され、zip形式でダウンロードすることができる。 +
+実際の{SI}の使用方法は、<<Tutorial.adoc#Create_Project,チュートリアルのプロジェクトの作成>>を参照すること。
+
+各項目に入力する値は下記のとおりである。
+
+[cols="15a,15a,15a,55a", options="header"]
+.プロジェクト作成時に設定する値
+|===
+3+h|項目名
+|説明
+
+3+|Project
+|ビルドツールを選択する。
+
+3+|Language
+|アプリケーションの言語を選択する。
+
+3+|{SB}
+|{SB}のバージョンを選択する。
+
+.7+|Project Metadata
+2+|Group
+|プロジェクトのグループID、アプリケーションのルートパッケージ名として使用する値を指定する。
+
+2+|Artifact
+|アーティファクトID、プロジェクト名として使用する値を指定する。
+
+.5+|Options
+|Name
+|アプリケーションの表示名、メインクラス名(XxxxApplication)に使用する値を指定する。
+
+|Description
+|プロジェクトの説明を記載する。
+
+|Package Name
+|ルートパッケージ名を指定する。未指定の場合、グループIDが使用される。
+
+|Packaging
+|パッケージング形式を指定する。
+
+|Java
+|使用するJavaのバージョンを指定する。
+
+3+|Dependencies
+|依存関係に含めるライブラリを選択する。プロジェクトの依存関係に選択したライブラリのStarterが設定される。
+|===
+
+[[Architecture_SpringInitializr_Project]]
+=== 生成されるプロジェクトの構成
+
+{SI}で生成した{SB}プロジェクトは下記のような構造になっている。 +
+中でも重要な下記の3つの要素について詳細を説明する。
+
+* <<Architecture_SpringInitializr_Project_PomXml>>
+* <<Architecture_SpringInitializr_Project_MainClass>>
+
+{SI}にてDependenciesに{SW}と{TH}を設定して生成したプロジェクトのディレクトリ構造を例に、ブランクプロジェクトの各要素を説明する。
+
+.プロジェクトのディレクトリ構造
+image::Architecture_SpringInitializr_Project_Structure.png[BlankProject Structure]
+
+[cols="10,90a", options="header"]
+.ブランクプロジェクトの各要素の説明
+|===
+|項番
+|説明
+
+|(1)
+|アプリケーションのルートパッケージ。
+
+|(2)
+|{SB}アプリケーションのメインクラス、内部構造の詳細については<<Architecture_SpringInitializr_Project_MainClass>>にて説明する。
+
+|(3)
+|静的リソースを配置するディレクトリ。
+
+|(4)
+|テンプレートファイルを配置するディレクトリ。
+
+|(5)
+|プロパティを定義するファイル。プロパティはアプリケーション内で参照するほか、プロパティの定義によって{SBA}にて生成されるBeanの設定を変更することができる。 +
+プロパティファイルは、ファイル名を``application.properties``から``application.yml``に変更することでYAML形式にプロパティを定義することができる。
+
+{SBA}にて生成されるBeanの設定変更については<<Architecture_AutoConfiguration>>を、プロパティ定義に関しては<<PropertyManagement.adoc#Ch05_PropertyManagemant,プロパティ管理>>を参照すること。
+
+|(6)
+|{SB}アプリケーションのテストクラス。
+
+|(7)
+|Maven Wrapperが格納されているディレクトリ。(9)のスクリプト実行時に使用される。
+
+|(8)
+|プロジェクト生成時に選択した依存ライブラリに関連するガイドおよびリファレンスドキュメントへのリンクが記載されている。
+
+|(9)
+|Maven Wrapperを実行することで、事前にビルド環境にMavenインストールすることなく、Mavenによるビルドを可能にするスクリプト。
+実行されるMavenの本体は、同じく同梱されている``.mvn/wrapper/maven-wrapper.jar``である。 +
+Linux環境ではmvnw、Windows環境では、mvnw.cmdを実行する。
+
+|(10)
+|プロジェクトの定義情報が定義されたpom.xml、内部構造の詳細については<<Architecture_SpringInitializr_Project_PomXml>>にて説明する。
+|===
+
+[[Architecture_SpringInitializr_Project_PomXml]]
+==== pom.xmlの構造
+
+{SI}にてDependenciesに{SW}と{TH}を設定して生成したプロジェクトを例にpom.xmlの構造について下記の2つに分割して説明する。
+
+* プロジェクト情報およびプロパティの定義
+* 依存ライブラリ、プラグインの定義
+
+プロジェクト情報およびプロパティの定義は下記のようになっている。
+
+[source, xml]
+.pom.xml
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- (1) -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.2.0.RELEASE</version>
+        <relativePath /> <!-- lookup parent from repository -->
+    </parent>
+
+    <!-- (2) -->
+    <groupId>com.example</groupId>
+    <artifactId>demo</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>demo</name>
+    <description>Demo project for Spring Boot</description>
+
+    <!-- (3) -->
+    <properties>
+        <java.version>11</java.version>
+    </properties>
+----
+
+[cols="10,90a", options="header"]
+.説明
+|===
+|項番
+|説明
+
+|(1)
+|親pomに{SBS}-parentが指定されている。 +
+{SB}が連携する依存ライブラリの検証済みバージョンを集約して定義することで、開発者は依存ライブラリのバージョン管理を容易にする役割がある。 +
+{SBS}-parentに定義されている依存ライブラリはバージョンの定義が不要になる。 +
+{SBS}-parentを使用した依存ライブラリのバージョン解決については<<Architecture_Starter>>にて説明している。
+
+|(2)
+|{SI}で指定したgroupId、artifactId、name、descriptionが定義される。 +
+versionに関しては開発が進むにつれて適宜変更する必要がある。
+
+|(3)
+|{SI}で指定したJavaのバージョンが定義される。
+|===
+
+依存ライブラリ、プラグインの定義は下記のようになっている。
+
+[source, xml]
+.pom.xml
+----
+    <dependencies>
+        <!-- (4) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- (5) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.junit.vintage</groupId>
+                    <artifactId>junit-vintage-engine</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+    </dependencies>
+
+    <!-- (6) -->
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
+----
+
+[cols="10,90a", options="header"]
+.説明
+|===
+|項番
+|説明
+
+|(4)
+|依存ライブラリに{SI}でDependenciesに指定した{SW}と{TH}のStarterプロジェクトが定義されている。 +
+{SI}にてDependenciesを選択しない場合は、{SBS}がセットされる。 +
+Starterによる依存ライブラリの解決については<<Architecture_Starter>>にて説明している。 +
+後から依存ライブラリを追加する場合には、上記のようにStarterプロジェクトの定義を追加すればよい。
+
+|(5)
+|依存ライブラリに{SI}では指定しなかった{SBS}-testが定義さていれる。
+これは{SI}がデフォルトで依存ライブラリに定義している。 +
+上記の定義を行うことで、{SB}のJUnit 5にてテストを実装するテスト関連の機能が有効になる。 +
+junit-vintage-engineを依存ライブラリから除外する設定がされているのは、JUnit3や4の実行を無効にするためである。 +
+{SB}のテスト関連機能については<<Architecture_Test>>にて説明する。
+
+|(6)
+|{SB}が提供する{SBMP}が定義されている。{SBMP}はアプリケーションの実行に必要な依存ライブラリをすべて含んだ{EJ}形式でパッケージングを行う際に使用される。 +
+{EJ}については<<Architecture_Run_ExecutableJar>>にて説明する。
+|===
+
+[[Architecture_SpringInitializr_Project_MainClass]]
+==== メインクラスの構造
+
+{SI}にて生成した{SB}プロジェクトのメインクラスの詳細について説明する。
+
+{SI}で{SB}プロジェクトを作成すると、``@SpringBootApplication``が付与されたメインクラスが自動的に生成される。
+``SpringApplication.run``の引数にメインクラスが指定されていることで、{SBA}を有効化する他、下記の設定が有効となる。
+
+* メインクラスのパッケージ配下の``@Configuration``や``@Component``（``@Controller``,``@Service``,``@Repository``）が読み込まれる
+* メインクラスのパッケージ配下の``@ConfigurationProperties``が読み込まれる
+* メインクラス自体がコンフィギュレーションクラス（``@Configuration``）として扱われる
+
+{SBA}が有効化される仕組みについては、<<Architecture_AutoConfiguration_Settings_workings>>を参照すること。
+
+{SI}にて生成した{SB}プロジェクトのメインクラスを下記に示す。
+
+[source,java]
+.com.example.demo.DemoApplication.java
+----
+package com.example.demo;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication  // (1)
+public class DemoApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(DemoApplication.class, args);  // (2)
+    }
+
+}
+----
+
+[cols="10,90a", options="header"]
+.説明
+|===
+|項番
+|説明
+
+|(1)
+|クラスレベルに``@SpringBootApplication``を付与している。
+
+|(2)
+|メインメソッド内で``SpringApplication.run()``の第一引数にメインクラスを指定している。
+|===
+
+[[Architecture_Run]]
+== アプリケーションの実行
+
+{SB}は{ES}と{EJ}により、アプリケーションをサーバにデプロイする必要をなくし即実行可能としている。
+
+この節では、{ES}と{EJ}についてそれぞれ説明する。
+
+* <<Architecture_Run_EmbeddedServer>>
+* <<Architecture_Run_ExecutableJar>>
+
+[[Architecture_Run_EmbeddedServer]]
+=== {ES}
+
+{SB}はアプリケーションサーバを内包しているためデプロイする必要もなくなり、Javaのmainメソッドを実行すればアプリケーションを実行できる。 +
+また、パッケージングの方法も通常はWarではなく、Jarを使用する。パッケージングの方法については<<Architecture_Run_ExecutableJar>>にて説明する。
+
+これによって、Webアプリケーション開発において多くの開発者が煩わしい作業だと感じていた、下記の問題が解決される。
+
+* アプリケーションサーバのセットアップやアプリケーションのデプロイする作業が必要となる
+
+{ES}を使用するための設定は必要なく{SBSW}を依存ライブラリに定義するだけで、{ES}上でアプリケーションが実行される。 +
+{SB}は{ES}としてTomcat、Jetty、Undertowに対応しており、{SBSW}を依存ライブラリに定義するとデフォルトでTomcatが使用される。
+
+{ES}に関する詳細は、 {reference_url}#boot-features-embedded-container[{SB}の公式リファレンス] を参照すること。
+
+[TIP]
+.{ES}の設定を変更する方法
+====
+{ES}の設定を変更する方法として、プロパティの設定値(``server.servlet.* ``や``server.tomcat.* ``)を変更する方法がある。 +
+詳細は {reference_url}#server-properties[{SB}の公式リファレンス] を参照すること。
+====
+
+[[Architecture_Run_ExecutableJar]]
+=== {EJ}
+
+{SB}ではパッケージングの方法は通常Warではなく、アプリケーションの実行に必要な依存ライブラリをすべて含んだJarを使用する。
+このJarは実行するとアプリケーションが起動する形式となっており、「{EJ}」という。
+
+デプロイもこのJarを所定のフォルダに配置して実行するだけとなり、従来のアプリケーション開発と比較すると実行が非常に容易になっている。
+
+以降では、{EJ}について下記の流れで説明する。
+
+* <<Architecture_Run_ExecutableJar_Settings>>
+* <<Architecture_Run_ExecutableJar_Build>>
+* <<Architecture_Run_ExecutableJar_Run>>
+
+[[Architecture_Run_ExecutableJar_Settings]]
+==== ビルドツールの設定
+
+{EJ}はspring-boot-maven-pluginによって生成される。
+{SB}が提供するビルド用プラグインをpom.xmlに定義する。
+
+[source, xml]
+.pom.xml
+----
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-maven-plugin</artifactId>
+        </plugin>
+        <!-- omitted -->
+    </plugins>
+    <!-- omitted -->
+</build>
+----
+
+{SI}でプロジェクトを生成した場合は、あらかじめ設定されているため修正は不要である。
+
+[NOTE]
+.{SB}が対応するビルドツール
+====
+{SB} はMaven以外にGradleとAntでのビルドに対応している。 +
+{GL}ではMavenを使用する例を示す。
+====
+
+[[Architecture_Run_ExecutableJar_Build]]
+==== アプリケーションのビルド
+
+Mavenでビルドする場合は、通常のパッケージングと同じく、次のコマンドを実行するだけである。
+
+[source, console]
+.{EJ}を作成するためのMavenコマンド
+----
+$ mvn package
+----
+
+このコマンドを実行すると、targetフォルダに次の2つのJarファイルが作成される。
+
+* demo-0.0.1-SNAPSHOT.jar
+* demo-0.0.1-SNAPSHOT.jar.original
+
+``.original``が付いているファイルはアプリケーション単体のJarであり、``.original``が付いていないほうが{EJ}である。
+{EJ}の中には、アプリケーションの実行に必要な依存ライブラリのJarもすべて含まれている。
+
+[[Architecture_Run_ExecutableJar_Run]]
+==== {EJ}の実行
+
+{EJ}の実行方法は通常のJarの実行方法と同じである。
+
+また、{EJ}は実行時に引数や環境変数によってプロパティを指定することが可能な仕組みになっており、{EJ}ファイルはポータビリティが高い仕様となっている。
+
+[source, console]
+.{EJ}の実行コマンド
+----
+$ java -jar target/demo-0.0.1-SNAPSHOT.jar --server.port=8088
+----
+
+[TIP]
+.Warの使用
+====
+{SB}は{EJ}を作成する以外にも、従来型のWarを作成する方法も用意している。 +
+Warの使用を検討する場合は、 {reference_url}#howto-traditional-deployment[{SB}の公式リファレンス] を参照すること。
+====
+
+[TIP]
+.その他の実行方法
+====
+{EJ}ファイルは、``init.d``や``Systemd``に登録して実行することができる。 +
+詳細については、 {reference_url}#deployment-install[{SB}の公式リファレンス] を参照すること。
+====
+
+[[Architecture_Test]]
+== {SB}のテスト関連機能
+
+{SF}はBeanをDIコンテナで管理するため単体テストがしやすいことが大きなメリットである。
+
+{SB}は{SF}のメリットに加え、下記の特徴がある。
+
+* JUnit 5に対応している
+* メジャーなアサーションライブラリをサポートしており、テストコードを実装しやすい
+* {SBA}をベースに、テストのための設定を省略できる
+* {SB}のBeanのMock化をサポートしており、テストファーストな開発にフィーチャーしやすい
+* Rest API向けのテスト機能が豊富に用意されている
+
+以降では、下記の流れで{SB}のテスト関連機能について説明する。
+
+* <<Architecture_Test_Settings>>
+* <<Architecture_Test_Annotation>>
+
+[[Architecture_Test_Settings]]
+=== {SB}のテスト関連機能を使用するための設定
+
+{SB}のテスト関連機能は、{SBS}-testを依存ライブラリに含めるだけで使用可能であり、{SI}で生成したプロジェクトではデフォルトで有効となる。
+
+{SB}が提供するテスト関連機能を用いてテストを実装する際の設定は下記の2点である。
+
+* {SBS}-testを依存ライブラリに含める
+* テストクラスにテストをサポートするアノテーションを付与する
+
+上記の設定について詳しく説明する。
+
+{SBS}-testを依存ライブラリに含める::
+依存ライブラリに{SBS}-testを定義する。下記は{SI}で生成したプロジェクトの例である。
++
+[source, xml]
+.pom.xml
+----
+    <!-- omitted -->
+    <dependencies>
+        <!-- omitted -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.junit.vintage</groupId>
+                    <artifactId>junit-vintage-engine</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+    </dependencies>
+    <!-- omitted -->
+----
++
+{SBS}-testのStarterは下記のライブラリを含んでおり、すぐにテストを実装することが可能となっている。
++
+
+[cols="20,20a,60a", options="header"]
+.{SBS}-testに依存関係が定義されているライブラリ
+|===
+2+|ライブラリ
+|説明
+
+.2+|{SF}
+|{ST}
+|{SF}を用いて開発したアプリケーションをテストするためのライブラリ。
+
+|{SBT}
+|{SB}を用いて開発したアプリケーションをテストするためのライブラリ。
+
+2+|JUnit 5
+|Javaアプリケーション開発における単体テストフレームワーク。 +
+JUnit Platform、JUnit Jupiter、JUnit Vintageの3つのプロジェクトから成り立っており、それぞれのプロジェクトは下記の役割を持っている。 +
+
+JUnit Platform::
+JVM上でテストを実行するための基盤となるコンポーネント群。
+
+JUnit Jupiter::
+JUnit 5でテストを実装、および実行するためのコンポーネント群。
+
+JUnit Vintage::
+JUnit 3またはJUnit 4ベースのコードでテストを実装、および実行するためのコンポーネント群。
+
+.2+|Assertion
+|AssertJ
+|Javaテストで流暢で豊かなアサーションを書くために使用されるオープンソースのライブラリ。
+
+|Hamcrest
+|マッチャーオブジェクトを書くためのライブラリ。マッチルールを宣言的に書くことができる。
+
+|Mock
+|Mockito
+|Mockライブラリ。``@MockBean``や``@SpyBean``を使用してテストを実装することができる。
+
+.2+|JSON suports
+|JSONassert
+|JSONのアサーションを行うライブラリ。
+
+|JsonPath
+|XMLに対するXPathのようにJSONの要素にアクセスできるライブラリ。
+|===
+
+[NOTE]
+.{SI}で生成したプロジェクトのJUnit 4の扱い
+====
+{SI}で生成したプロジェクトでJUnit 4を使用する場合、デフォルトでは``junit-vintage-engine``を依存関係から除外しているため、Junit 4でテストを実施することはできない。
+====
+
+テストクラスにテストをサポートするアノテーションを付与する::
+テストクラスにテストをサポートするアノテーションを付与することで、テスト関連の設定(テスト対象およびテストをサポートするBeanが生成される)が有効化される。 +
+また、テスト関連の設定はテスト用のコンフィギュレーションクラスを追加することでテスト関連の設定をカスタマイズすることができる。 +
++
+アプリケーション開発者は、テストクラスにアノテーションを付与するだけでテストの実装を開始することができる。 +
+テストをサポートするアノテーションについては<<Architecture_Test_Annotation>>にて説明する。
+
+[[Architecture_Test_Annotation]]
+=== テストをサポートするアノテーション
+
+{SB}はテストをサポートするアノテーションを提供している。
+
+テストクラスに{SB}が提供するアノテーションを付与することで、通常の{ST}に加えてテスト関連の設定(テスト対象およびテストをサポートするコンフィギュレーションが読み込まれる)が有効化される。 +
+これにより、従来の{SF}を用いたアプリケーション開発で実施していたテスト関連の設定を定義する作業を大幅に削減することができる。
+
+また、テスト関連の設定は<<Architecture_Test_Annotation_TestConfiguration,テスト用のコンフィギュレーションクラスを追加>>することでテスト関連の設定をカスタマイズすることができる。
+
+テストをサポートするアノテーションは下記の2種類が提供されている。
+
+<<Architecture_Test_SpringBootTest>>::
+``@SpringBootTest``を使用することで下記のようなテストを実施することができる。
+* Mockサーブレット環境でアプリケーションを実行しての結合テスト
+* {ES}でアプリケーションを実行しての結合テスト
+* 任意のコンフィギュレーションクラスを指定して読み込んでの単体テスト
++
+下記に``@SpringBootTest``を付与したテストクラスの例を示す。
++
+[source,java]
+.com.example.demo.DemoApplicationTests.java
+----
+package com.example.demo;
+
+// omitted
+import org.springframework.boot.test.context.SpringBootTest;
+
+
+@SpringBootTest
+class DemoApplicationTests {
+
+    // omitted
+
+}
+----
+
+
+<<Architecture_Test_SliceTest>>::
+``@SpringBootTest``を使用するテストでは、テスト対象外となる機能も有効になってしまうため、単体テストを行う場合に効率が悪い。
+{SB}やサードパーティから、特定の機能のみ有効にするアノテーションが提供されており、効率的にテストを実施できる仕組みが{SB}から提供されている。
++
+特定の機能のみ有効にするアノテーションをテストクラスに付与するだけで、テスト対象およびテストに必要なコンフィギュレーションクラスが自動で読み込まれる。
+``@DataJdbcTest``、``@RestClientTest``、``@WebMvcTest``などが提供されており、最小限の設定で単体テストを実装することができる。
++
+{GL}では、上記のような``@…​Test``アノテーションを{SA}と呼び、{SA}を使用した単体テストを{SLT}と呼ぶこととする。
++
+テストをサポートするアノテーションは下記の観点で使い分けること。
++
+* 結合テストには、``@SpringBootTest``を使用する
+* 単体テストにて、テスト対象の{SA}が提供されている場合は{SA}を使用する
+* 単体テストにて、テスト対象の{SA}が提供されていない場合は、``@SpringBootTest``のclasses要素を使用する
+
+以降では各アノテーションの概要について説明する。
+
+[[Architecture_Test_Annotation_TestConfiguration]]
+[TIP]
+.自作したテスト用のコンフィギュレーションクラスを適用する方法
+====
+データソースの変更など、自作したテスト用のコンフィギュレーションクラスは下記のように実装することで適用できる。
+
+コンフィギュレーションクラスに``@TestConfiguration``を付与する。
+
+[source,java]
+.自作したテスト用のコンフィギュレーションクラス
+----
+@TestConfiguration
+public class MyTestConfig {
+
+    @Bean
+    public DataSource datasource() {
+        return new EmbeddedDatabaseBuilder()
+            .setType(EmbeddedDatabaseType.H2)
+            .setScriptEncoding("UTF-8")
+            .addScripts("classpath:scripts/init.sql")
+            .build();
+    }
+
+}
+----
+
+自作したテスト用のコンフィギュレーションクラスはデフォルトでは読み込み対象に含まれないため、``@Import``を使用して読み込み対象に含める。
+
+[source,java]
+.com.example.demo.DemoApplicationTests.java
+----
+package com.example.demo;
+
+// omitted
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+
+
+@SpringBootTest
+@Import(MyTestConfig.class)
+class DemoApplicationTests {
+
+    // omitted
+
+}
+----
+====
+
+[[Architecture_Test_SpringBootTest]]
+==== @SpringBootTest
+
+{SB}は、テストをサポートするアノテーションとして``@SpringBootTest``を提供している。
+
+``@SpringBootTest``は、通常の{ST}に加えて下記の機能を提供している。
+
+* アプリケーションで定義したすべてのコンフィギュレーション、もしくは任意のコンフィギュレーションクラスを読み込む
+* テスト対象のアプリケーションをMockサーブレット環境、{ES}、サーバなしのいずれかの環境で実行する
+* テスト実行時のみ有効となる任意のプロパティを指定する
+* テスト実行時のみ有効となる任意の実行時引数を指定する
+
+``@SpringBootTest``を使用することで従来の{SF}を用いたアプリケーション開発で必要だったデプロイなどの作業を行わずに結合テストが実行できる。
+
+
+[NOTE]
+.{SB}が{SBT}を実行する仕組み
+====
+``@SpringBootTest``を付与したテストクラスで、どのようにテストが実行されるのかを下記で説明する。
+
+image::Architecture/Architecture_Test_SpringBootTest.png[{SBT} Architecture,795]
+
+====
+
+
+``@SpringBootTest``の各機能は下記の引数をアノテーションに指定することで利用可能である。
+
+[cols="20,80"]
+.@SpringBootTestの引数
+|===
+|要素名
+|説明
+
+|classes
+|テストを実行する際に任意のコンフィギュレーションクラスを読み込み対象に追加することができる。 +
+この要素に任意のコンフィギュレーションクラスを指定した場合は、アプリケーションで定義された他のコンフィギュレーションクラス({AC}クラス含む)の読み込みは行われない。
+
+|properties
+|テストを実行する際にプロパティを追加することができる。値は``key = value``形式で指定する。
+
+|args
+|テストを実行する際に実行時引数を指定することができる。
+
+|webEnvironment
+|アプリケーション起動時におけるWeb環境のモード(サーバ起動方式)を指定する。 +
+下記で詳しい説明をする。
+|===
+
+アプリケーション起動時のWeb環境のモード(webEnvironment要素)下記の値を指定することができる。
+
+WebEnvironment.MOCK::
+サーブレットAPIがクラスパスにある場合、Mockサーブレット環境でWebApplicationContextを作成する。 +
+webEnvironment要素のデフォルト値であり、{ES}は起動されない。
++
+Mockサーブレット環境での結合テストをサポートするアノテーションとして、``@AutoConfigureMockMvc``が提供されている。 +
+``@AutoConfigureMockMvc``をテストクラスに付与するとMockMvcの{AC}が実行されるため、MockMvcをAutowiredして使用する環境が整う。
+
+WebEnvironment.RANDOM_PORT / WebEnvironment.DEFINED_PORT::
+WebApplicationContextを作成し、別スレッドで起動した{ES}上でアプリケーションを実行する。 +
+WebEnvironment.RANDOM_PORTでは空いているポートをランダムに使用、WebEnvironment.DEFINED_PORTでは``server.port``プロパティに設定されたポートを使用する。
++
+{ES}上でアプリケーションを実行することで本番環境に近い環境でテストを実行することができるメリットがある。
+その反面、{ES}の起動に時間を要し、<<Architecture_Test_SpringBootTest_RestrictionByAnotherThread>>がある。
+
+[[Architecture_Test_SpringBootTest_RestrictionByAnotherThread]]
+[WARNING]
+.別スレッドで起動した{ES}上でアプリケーションが実行される場合の制約
+====
+テストコードに``@Transactional``アノテーションをテストクラスもしくはテストメソッドに付与すると、テスト実行開始から終了まで一トランザクションとなり、デフォルトではテスト終了後にロールバックされる。
+
+しかし、WebEnvironment.RANDOM_PORT / WebEnvironment.DEFINED_PORTに設定して、HTTPクライアントを利用してテストを実施する場合、HTTPクライアントとテストコードが実行されているアプリケーションとは別スレッドになるため別トランザクションになる。そのため、HTTPクライアントでリクエストした処理については、テスト終了後にロールバックされない。
+
+WebEnvironment.RANDOM_PORT / WebEnvironment.DEFINED_PORTに設定して、HTTPクライアントを利用してテストを実施する場合は、テストメソッド実行毎に永続化されたリソースの初期化を行うなどの対応が必要となる。
+====
+
+WebEnvironment.NONE::
+ApplicationContextを作成し、``SpringApplication.setWebApplicationType（WebApplicationType）``に``WebApplicationType.NONE``が設定される。 +
+Webサーバの機能を使用しない結合テストの場合に指定する。
+
+[[Architecture_Test_SliceTest]]
+==== {SA}
+
+{SB}やサードパーティのライブラリは、{SA}を提供している。
+
+アノテーションをテストクラスに付与するだけで、テスト対象およびテストに必要なコンフィギュレーションクラスが自動で読み込まれる。
+そのため、最小限のBean生成で単体テストの実装を行うことができる。
+
+{SA}は``@…​Test``という名称で提供されており、{SB}からは下記のようなアノテーションが提供されている。 +
+{SB}が提供するアノテーションと読み込み対象の{AC}クラスの一覧は、 {reference_url}#test-auto-configuration[{SB}の公式リファレンス] を参照すること。
+
+[cols="25,25,25,25"]
+.{SA}の例
+|===
+|@DataJdbcTest
+|@DataJpaTest
+|@DataLdapTest
+|@DataMongoTest
+
+|@DataNeo4jTest
+|@DataRedisTest
+|@JdbcTest
+|@JooqTest
+
+|@JsonTest
+|@RestClientTest
+|@WebFluxTest
+|@WebMvcTest
+|===
+
+例えば、テストクラスに``@DataJdbcTest``を付与した場合には下記の{AC}クラスが読み込まれる。
+
+* org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration
+* org.springframework.boot.autoconfigure.data.jdbc.JdbcRepositoriesAutoConfiguration
+* org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+* org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+* org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+* org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration
+* org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration
+* org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration
+* org.springframework.boot.test.autoconfigure.jdbc.TestDatabaseAutoConfiguration
+
+[TIP]
+.任意の{AC}クラスを読み込み対象外にする方法
+====
+任意の{AC}クラスを読み込み対象外にする方法には下記の2つがある。
+
+* {SA}の``excludeAutoConfiguration``メソッドを使用する
+* ``@ImportAutoConfiguration#exclude``を使用する
+====
+
+[NOTE]
+.{SLT}を実現する仕組み
+====
+``@WebMvcTest``を付与したテストクラスを例に、{SLT}がどのように実行されるのかを下記で説明する。
+
+image::Architecture/Architecture_Test_SliceTest.png[SliceTest Architecture]
+
+====
+
+[WARNING]
+.{SA}は複数付与することはできない
+====
+{SA}は複数付与には対応していない。 +
+そのため、1つを通常通り付与し、もう1つは{SA}内に定義されている``@AutoConfigure…​``を付与してコンフィギュレーションを追加する。
+====

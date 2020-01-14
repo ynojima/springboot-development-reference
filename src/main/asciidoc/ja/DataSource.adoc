@@ -1,0 +1,470 @@
+include::_include_all.adoc[]
+
+:toc:
+:sectnums: 4
+:toclevels: 6
+
+[[DataSource]]
+
+= データソース
+
+== {overview}
+
+=== データソースについて
+
+データソースとは::
+データソースは、アプリケーションが使用するDBにアクセスするためのAPIである。 +
+データソースを使用することで各DBベンダが用意しているJDBCのドライバを直接触ることなく、DBの接続情報(接続URL、接続ユーザ、パスワードなど)の設定やJDBCのロードを
+行うことが可能となる。
+また、使用するデータソースはコネクションのプーリング機能も持っている。
+
+{SB}でのデータソースの利用について::
+通常、アプリケーションサーバ上のデータソースを使用すること多いが、
+{SB}は組み込みのTomcatで起動する仕組みになっているため、サードパーティのデータソースを使用してアクセスする。 +
+{SB}では3つのデータソースがサポートされている。詳細は<<Support_datasource>>を参照すること。
+
+DB初期化処理について::
+{SF}ではアプリケーション起動時にテーブル作成や初期データを作成するDB初期化処理機能がある。 +
+{SB}ではSQLファイルをクラスパス直下に配置することで、DB初期化処理機能が自動で有効になる。
+
+
+== {how_to_use}
+
+=== {starter_to_use}
+{SB}として用意されている永続化フレームワークのStarter(``mybatis-{SBS}``など)を使用することで有効になる。 +
+また、永続化フレームワークを使用しない場合は、``{SBS}-jdbc``を使用することで有効になる。
+
+=== {enable_auto_configuration}
+{enable_auto_configuration}は下記のとおり。
+
+.{enable_auto_configuration}
+[cols="6,70a", options="header"]
+|===
+|クラス名
+|概要
+
+|``org.springframework.boot.autoconfigure.`` +
+``jdbc.DataSourceAutoConfiguration``
+|データソースの設定を行う。このクラスが下記の個別の設定を呼び出す。
+
+* ``DataSourceConfiguration``
+* ``DataSourceInitializationConfiguration``
+
+|``org.springframework.boot.autoconfigure.`` +
+``jdbc.DataSourceConfiguration``
+|{SB}でサポートされているデータソースのBean定義を行う。 +
+<<Support_datasource>>は下記参照すること。
+
+|``org.springframework.boot.autoconfigure.`` +
+``jdbc.DataSourceInitializationConfiguration``
+|DB初期化処理のイベントリスナーの設定を行う。イベントは、アプリケーション実行時に行われる。
+
+|===
+
+{SB}でサポートされている下記の実装クラスがクラスパス上に存在すると、その実装クラスに合わせた{AC}が行われる。
+
+[[Support_datasource]]
+.サポートされているデータソース
+[cols="30a,40a,30a", options="header"]
+|===
+|データソース名
+|データソースのクラス
+|依存関係に含めるartifact(groupId)
+
+|HikariCP
+|``com.zaxxer.hikari.HikariDataSource``
+|hikariCP(com.zaxxer)
+
+|Tomcat JDBC Connection Pool
+|``org.apache.tomcat.jdbc.pool.DataSource``
+|tomcat-jdbc(org.apache.tomcat)
+
+|Apache Commons DBCP2
+|``org.apache.commons.dbcp2.BasicDataSource``
+|commons-dbcp2(org.apache.commons)
+
+|===
+
+[NOTE]
+====
+DataSourceConfigurationは {reference_url}#boot-features-connect-to-production-database[公式リファレンス]
+の優先順に応じてサポートされているデーターソースいずれか1つをBean定義する。
+
+``{SBS}-jdbc``の依存関係にHikariCPが含まれている。 +
+HikariCPを使用する場合は、依存関係の変更を意識する必要はない。 +
+
+データソースを切り替える場合は、HikariCPを依存関係から排除し、別のデータソースクラスを依存関係に追加する。
+
+====
+
+
+
+=== {customization_points}
+データソースの設定値、DB初期化処理はプロパティの設定でカスタマイズする。
+
+[[DataSource_property_based_configuration]]
+==== {property_based_configuration}
+
+データソース周りの設定はDB初期化処理も含めて、``spring.datasource.*``を使用する。 +
+
+.代表的な設定値
+[cols="6,6,40a", options="header"]
+|===
+
+|プロパティ名
+|デフォルト値
+|概要
+
+|``spring.datasource.driver-class-name``
+|-
+|ドライバクラス名を設定する。
+
+|``spring.datasource.url``
+|-
+|接続URLを設定する。
+
+|``spring.datasource.username``
+|-
+|接続ユーザを設定する。
+
+|``spring.datasource.password``
+|-
+|接続するためのパスワードを設定する。
+
+|``spring.datasource.hikari.*``
+|-
+|HikariCPの設定をする。 +
+設定値の詳細は、 https://github.com/brettwooldridge/HikariCP[HikariCPのREADME]を参照すること。
+
+
+|``spring.datasource.tomcat.*``
+|-
+|Tomcat JDBC Connection Poolの設定をする。 +
+設定値の詳細は、 https://tomcat.apache.org/tomcat-8.0-doc/jdbc-pool.html#Common_Attributes[The Tomcat JDBC Connection Poolの公式リファレンス]を参照すること。
+
+|``spring.datasource.dbcp2.*``
+|-
+|Apache commons DBCP2の設定をする。 +
+設定値の詳細は、 https://commons.apache.org/proper/commons-dbcp/configuration.html[Apache commons DBCPの公式リファレンス]を参照すること。
+
+|``spring.datasource.type``
+|-
+|2種類以上のデータソースがクラスパスに存在する場合に、使用するデータソースクラスをFQCNで設定する。 +
+組み込みTomcatを使用する場合は設定する必要がないが、War作成により外部にあるJarでデータソースクラスが競合する場合に使用する。
+
+|``spring.datasource.jndi-name``
+|-
+|JNDIでデータソースを取得する場合のJNDI名を設定する。 +
+組み込みTomcatを使用する場合は設定する必要がないが、War作成によりアプリケーションサーバで起動する場合、アプリケーションサーバのデータソースを利用する場合に設定する。
+
+JNDIの設定例は {reference_url}#boot-features-connecting-to-a-jndi-datasource[公式リファレンス]を参照すること。
+
+|===
+
+
+[NOTE]
+====
+``com.h2database``のH2が依存関係に含まれている場合は、
+``spring.datasource.*``を設定しなくてもDBアクセスが可能である。 +
+その場合、{SB}がデフォルトで持っているデータソースの接続情報が使用される。 +
+URL名とDriverClassはEmbeddedDatabaseConnectionから取得する。DB名は``testdb``、接続ユーザは``sa``である。
+====
+
+
+.代表的な設定値(DB初期化処理)
+
+[cols="6,6,40a", options="header"]
+|===
+
+|プロパティ名
+|デフォルト値
+|概要
+
+
+|``spring.datasource.platform``
+|-
+|DB初期化ファイルを切替えるためのファイル名のサフィックスを設定する。 +
+詳細は、<<SQL_FILE_CHANGE>>を参照すること。
+
+|``spring.datasource.initialization-mode``
+|embedded
+|DBの初期化処理のモードを設定する。
+
+* embedded : H2の場合はアプリケーション実行時に必ず初期化処理を行う。
+* always : DBのベンダに問わずアプリケーション実行時に必ず初期化処理を行う
+* none : 初期化処理を無効にする
+
+|``spring.datasource.continue-on-error``
+|false
+|DB初期化処理でエラーが発生した際、アプリケーションを続行するかどうかを設定する。 +
+デフォルトではエラー時にアプリケーションが異常終了する。
+
+|===
+
+
+=== {functional_how_to_use}
+
+==== JDBCデータソースの設定
+
+プロパティに接続情報およびデータソース固有の設定値を設定する。
+
+使用するDBはPostgreSQLの場合を例に説明する。
+
+.application.yml
+[source,yaml]
+----
+spring:
+  datasource:
+    # (1)
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/userdb
+    username: username
+    password: password
+    # (2)
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 10
+----
+
+[cols="6,70", options="header"]
+|===
+
+|番号
+|概要
+
+|(1)
+|DB接続するための接続情報(JDBCドライバ、URL、ユーザ名、パスワード)の設定をする。
+
+|(2)
+|必要に応じて、データソース固有の設定をする。
+
+|===
+
+==== DB初期化処理
+クラスパス直下に下記のファイルを配置するだけでDB初期化処理が機能する。
+
+[[DB_INIT_FILE]]
+.初期化で使用するSQLファイル
+[cols="10,40a", options="header"]
+|===
+
+|ファイル名
+|内容
+
+|schema.sql
+|テーブル定義用のDDLを記載する。
+
+|data.sql
+|初期値登録用のDMLを記載する。
+
+|===
+
+PostgreSQLのDB初期化を例に説明する。
+
+.application.yml
+[source,yaml]
+----
+spring:
+  datasource:
+    #(1)
+    initialization-mode: always
+----
+
+.src/main/resource/schema.sql
+[source,SQL]
+----
+-- #(2)
+create table if not exists person(
+  person_id varchar(6),
+  person_name varchar(40),
+  CONSTRAINT person_id_pkey PRIMARY KEY(person_id)
+);
+----
+
+.src/main/resource/data.sql
+[source,SQL]
+----
+-- #(3)
+INSERT INTO person(person_id,person_name) values('111111','Taro')
+ON CONFLICT ON CONSTRAINT person_id_pkey DO NOTHING;
+
+INSERT INTO person(person_id,person_name) values('222222','Jiro')
+ON CONFLICT ON CONSTRAINT person_id_pkey DO NOTHING;
+
+----
+
+[cols="6,70", options="header"]
+|===
+
+|番号
+|概要
+
+|(1)
+|DBの初期化処理のモードを設定する。PostgreSQLのためalwaysを設定する。
+
+|(2)
+|アプリケーション実行時のDDLを用意する。 +
+初期化処理が有効になるプロパティが設定されている場合、
+アプリケーション実行の度に毎回同じSQLが実行される。 +
+起動２回目以降はテーブル重複エラーとならないようなSQLにする。
+今回の例では、テーブルがすでに存在していた場合は何もしないSQLにしている。
+
+|(3)
+|アプリケーション実行時の初期DMLを用意する。 +
+起動２回目以降はデータ重複エラーとならないようなSQLにする。 +
+今回の例では、データがすでに存在していた場合は何もしないSQLにしている。 +
+(上記の例で使用しているCONFLICTは、PostgreSQL9.5以降で使用可能である。)
+
+|===
+
+
+
+=== {customization_example}
+
+[[SQL_FILE_CHANGE]]
+==== DB初期化処理で動作するファイル名の変更
+動作確認とテスト環境で使用するDBが違う場合、環境に応じて初期化データを変えたい場合に
+``spring.datasource.platform``を使用する。
+
+設定があると下記ファイル名のsqlファイルがDB初期化処理で使用される。
+
+* schema.sql
+* data.sql
+* schema-[プロパティの設定値].sql
+* data-[プロパティの設定値].sql
+
+[NOTE]
+====
+``spring.datasource.platform``の設定にかかわらず、<<DB_INIT_FILE>>に記載されたSQLも有効になる。
+====
+
+設定値が3パターン存在し、DB初期化のSQLを切替えたい場合を例に説明する。
+
+image::DataSource_SQL_file_Structure.png[sqlファイル]
+
+[cols="6,70", options="header"]
+|===
+
+|番号
+|概要
+
+|(1)
+|テスト環境共通のDDL・初期DMLを用意する。
+
+|(2)
+|結合テスト用のDDL・初期DMLを用意する。
+
+|(3)
+|単体テスト用のDDL・初期DMLを用意する。
+
+|(4)
+|ローカル動作確認用DDL・初期DMLを用意する。
+
+|===
+
+.application.yml
+[source,yaml]
+----
+spring:
+  datasource:
+    #(1)
+    platform: local
+----
+
+[cols="6,70a", options="header"]
+|===
+
+|番号
+|概要
+
+|(1)
+|ローカル動作確認用に下記のSQLが起動される。
+
+* schema.sql
+* data.sql
+* schema-local.sql
+* data-local.sql
+
+|===
+
+[NOTE]
+====
+DB初期化処理は主にテスト時に活用することが想定される。 +
+本番環境で誤動作しないように有効・無効をプロファイルで切替えること。
+====
+
+
+[[DataSource_how_to_test]]
+== {test}
+
+データソースそのものをテストする機能（アノテーション）は存在しないが、
+データソース関連で{SB}が用意しているテスト機能を紹介する。
+
+=== {SB}がもっているデフォルトの接続情報を利用したテスト
+``@AutoConfigureTestDatabase``アノテーションをテストコードに使用すると、{SB}がデフォルトで持っている接続情報を使用し、H2でテストが実施される。 +
+これにより、実レコードに影響を与えないようにすることができる。
+
+永続化フレームワークテスト用の{SA}(``@MybatisTest``、``@DataJpaTest``など)
+はすでに``@AutoConfigureTestDatabase``が有効になっているため、各{SA}ではH2が使用される。 +
+H2以外でテストを実施したい場合は、``@AutoConfigureTestDatabase(replace=Replace.NONE)``
+をテストクラスに付与することで``spring.datasource.*``の接続情報を利用したテストが行える。
+
+=== 使用例
+``@MybatisTest``を使用した場合を例に説明する。
+
+==== H2を使用してテストを実施する場合
+
+.PersonRepositoryH2Test.java
+[source,java]
+----
+@MybatisTest //(1)
+class PersonRepositoryH2Test {
+
+    @Autowired
+    PersonRepository personRepository;
+
+    //omitted
+}
+----
+
+[cols="6,70p", options="header"]
+|===
+
+|番号
+|概要
+
+|(1)
+|``@MybatisTest``アノテーションを付与する。 +
+``@AutoConfigureTestDatabase``が有効になっているため、{SB}のデフォルトの接続情報でテストが行える。
+|===
+
+==== H2以外を使用してテストを実施する場合
+
+.UserRepositoryPostgresTest.java
+[source,java]
+----
+@MybatisTest //(1)
+@AutoConfigureTestDatabase(replace=Replace.NONE) //(2)
+class ParsonRepositoryPostgresTest {
+
+    @Autowired
+    ParsonRepository parsonRepository;
+
+    //omitted
+}
+----
+
+[cols="6,70p", options="header"]
+|===
+
+|番号
+|概要
+
+|(1)
+|``@MybatisTest``アノテーションを付与する。
+
+|(2)
+|``@AutoConfigureTestDatabase(replace=Replace.NONE)``を設定する。 +
+{SB}のデフォルトの接続情報ではなく、``spring.datasource.*``の接続情報が利用される。
+
+|===

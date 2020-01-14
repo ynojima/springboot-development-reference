@@ -1,0 +1,21 @@
+include::_include_index.adoc[]
+include::_include_all.adoc[]
+:sectnums:
+:sectnumlevels: 10
+
+= {doctitle}
+
+// 各章はLevel1から始めるため、1段下げる
+:leveloffset: +1
+
+include::_introduction_index.adoc[]
+
+include::SpringBoot_basics.adoc[]
+
+include::SpringBoot_architecture.adoc[]
+
+include::Tutorial.adoc[]
+
+include::_function_index.adoc[]
+
+:leveloffset: -1

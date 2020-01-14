@@ -1,0 +1,16 @@
+include::_include_index.adoc[]
+include::_include_all.adoc[]
+
+= {doctitle}
+
+. <<introduction_index.adoc#,はじめに>>
+
+. <<SpringBoot_basics.adoc#,{SB}の基本>>
+
+. <<SpringBoot_architecture.adoc#,{SB}の主要な機能>>
+
+. <<Tutorial.adoc#,チュートリアル>>
+
+. <<function_index.adoc#,機能紹介>>
+
+<<single_index.adoc#,Singleページ版>>

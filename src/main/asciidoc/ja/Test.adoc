@@ -1,0 +1,429 @@
+include::_include_all.adoc[]
+
+[[Test]]
+
+:sectnums: 4
+
+= {SB}のTest機能
+
+[[Test_Feature]]
+== 機能説明
+<<SpringBoot_architecture.adoc#Architecture_Test,{SB}のテスト関連機能>>で{SB}におけるテストのアーキテクチャは概ね説明されているため、
+{GL}ではより細かな説明や紹介しきれなかった機能を紹介する。
+
+[[Test_Feature_AutoConfiguration]]
+=== JUnit上で{SB}の機能を有効化するアノテーション
+JUnitで{SB}の機能を利用したテストを行う場合は、特定の種類のアノテーションをテストクラスに付与し、
+DIコンテナなどの{SB}の機能を有効化する必要がある。 +
+以降で{SB}の機能を有効化できるアノテーションについて説明する。
+
+[[Test_Feature_AutoConfiguration_SpringBootTest]]
+==== アプリケーション全体を有効にする
+``@SpringBootTest``をテストクラスに付与することで、アプリケーション全体の{AC}やコンポーネントが有効になり、
+JUnit上で使用できる。 +
+詳細については、<<SpringBoot_architecture.adoc#Architecture_Test_SpringBootTest,@SpringBootTest>>を参照すること。 +
+ +
+なお、``@SpringBootTest``のデフォルト設定ではサーブレットコンテナが有効にならないため、
+例外ハンドリングが一部有効にならない。 +
+詳細は<<ErrorHandling.adoc#ErrorHandling,例外ハンドリング>>を参照すること。 +
+ +
+基本的には、結合テストでアプリケーション全体の機能を使用する必要がある場合に使用する。 +
+
+
+[[Test_Feature_AutoConfiguration_Slice]]
+==== 一部の機能のみ有効にする
+``@SpringBootTest``によるテストは、テストの対象となる機能以外も有効になってしまうため、単体テストや特定機能のテストを行う場合は非効率である。 +
+{SB}では特定機能のみ有効にする{SA}が複数提供されているため、
+テスト対象ごとに適切に付与することで、効率的にテストを実施できる。 +
+ +
+下記に{SB}が用意している{SA}を示す。 +
+各アノテーションで有効になる{AC}の詳しい情報は {reference_url}#test-auto-configuration[公式リファレンス]を参照すること。 +
+
+[IMPORTANT]
+{SA}を複数付与してテストを行うことはできない。 +
+{SA}で有効にならない機能を使用したい場合は<<Test_Feature_Annotation_AutoConfigure>>や<<Test_Feature_Annotation_ImportAutoConfiugration>>などを使用すること。
+
+[[Test_Feature_AutoConfiguration_Slice_WebMvcTest]]
+===== Controllerの機能を有効にする
+``@WebMvcTest``は{SM}レイヤの機能が有効になる{SA}であり、主にControllerなどのテストを行う際に使用する。 +
+``MockMvc``が自動的にBean定義されるため、``MockMvc``を用いて疑似的にリクエストを送り、受け取ったレスポンスを検証できる。 +
+また、{SM}だけでなく、{SSE}、テンプレートエンジン、パーサーライブラリも有効になる。 +
+ +
+なお、``MockMvc``を使用してリクエストを送る際は、実際のアプリケーションで利用される``{DS}``ではなく、
+Mockに対し送信されるため、Viewのコンテンツが取得できないなど挙動が異なる場合がある。
+例外ハンドリングにおける挙動の違いは<<ErrorHandling.adoc#ErrorHandling,例外ハンドリングの章>>を参照すること。 +
+ +
+``@WebMvcTest``に指定できる引数の代表例を下記に示す。
+
+[cols="20,10,70", options="header"]
+.@WebMvcTestの引数
+|===
+|属性名
+|デフォルト値
+|概要
+
+|controllers
+|-
+|指定したControllerのみ有効になる。 +
+デフォルトではすべてのControllerが有効になる。
+|===
+
+[[Test_Feature_AutoConfiguration_Slice_WebFluxTest]]
+===== WebFluxの機能を有効にする
+``@WebFluxTest``は``@WebMvcTest``と同様に、Spring WebFluxレイヤの機能が有効になる{SA}である。 +
+{GL}ではWebFluxを取り扱わないため詳しく説明しないが、
+``WebTestClient``が自動的にBean定義されるため、``WebTestClient``を用いてリクエストを送り、受け取ったレスポンスを検証できる。 +
+``WebTestClient``に関してはその他テスト機能の<<Test_Feature_Other_WebTestClient>>を参照すること。
+
+[[Test_Feature_AutoConfiguration_Slice_JsonTest]]
+===== パーサーライブラリを有効にする
+``@JsonTest``を付与することで、JSONのパーサーライブラリが有効になり、JSONのシリアライズ、デシリアライズが検証できるようになる{SA}である。 +
+下記の3つのパーサーライブラリが有効になる。 +
+
+* Jackson
+* Gson
+* JsonB
+
+また、JSONのシリアライズおよびデシリアライズが検証可能な``JsonTester``が有効になる。 +
+
+
+[[Test_Feature_AutoConfiguration_Slice_RestClientTest]]
+===== HTTPクライアントを有効にする
+``@RestClientTest``を付与することで{SB}におけるHTTPクライアントである``RestTemplate``および``WebClient``が有効になり、
+外部APIの呼び出しを検証できるようになる{SA}である。 +
+また、外部サーバのMockとして利用できる``MockRestServiceServer ``が有効になる。 +
+ +
+``@RestClientTest``に指定できる引数の代表例を下記に示す。 +
+[cols="20,10,70", options="header"]
+.@RestClientTestの引数
+|===
+|属性名
+|デフォルト値
+|概要
+
+|components
+|-
+|指定したコンポーネントのみ有効にする。
+|===
+
+[[Test_Feature_AutoConfiguration_Slice_DB]]
+===== DBアクセスを有効にする
+下記に示す{SA}が用意されている。 +
+
+* ``@DataJdbcTest``
+* ``@DataJpaTest``
+* ``@DataLdapTest``
+* ``@DataMongoTest``
+* ``@DataNeo4jTest``
+* ``@DataRedisTest``
+* ``@JdbcTest``
+* ``@JooqTest``
+
+``@DataJpaTest``の使用方法に関しては、<<SpringDataJPA.adoc#SpringDataJPA,SpringDataJPA>>の節で説明を行っているため、そちらを参照すること。 +
+それ以外のアノテーションに関しては、{GL}では説明しない。
+
+[[Test_Feature_Annotation]]
+=== テスト対象のアプリケーションの一部機能を有効化するアノテーション
+<<Test_Feature_AutoConfiguration>>に示されたアノテーションは、JUnit上でDIコンテナなど{SB}の機能を有効化できる。 +
+より細かなコンポーネントやクラスレベルで機能を有効化したい場合、下記に示されるアノテーションを使用する必要がある。 +
+なお、下記に示されるアノテーション単体ではDIコンテナなどの機能は利用できない。
+
+
+[[Test_Feature_Annotation_AutoConfigure]]
+==== @AutoConfigureアノテーション
+特定のコンポーネントを有効化するためのアノテーション。 +
+ただし、<<Test_Feature_AutoConfiguration>>とは異なり、単体では{SB}の機能をJUnit上で利用できない。 +
+複数種類が用意されており、``@SpringBootTest``もしくは{SA}と併用する。 +
+代表例として``@AutoConfigureMockMvc``を紹介する。
+
+[[Test_Feature_Annotation_AutoConfigure_MockMvc]]
+===== @AutoConfigureMockMvc
+``MockMvc``の機能を有効にするアノテーション。 +
+
+``@WebMvcTest``を使用したテストの場合はこのアノテーションを付与せずに有効になるが、
+それ以外の場合に使用する。 +
+ +
+``@SpringBootTest``使用下で``MockMvc``を利用したテストを作成する実装例を下記に示す。 +
+[source,java]
+.MockMvcTest
+----
+
+@SpringBootTest
+@AutoConfigureMockMvc //(1)
+public class MockMvcTest{
+
+    @Autowired
+    private MockMvc mockMvc; //(2)
+
+    //omitted
+}
+----
+
+[cols="10,90", options = "header"]
+|===
+|項番
+|説明
+
+|(1)
+|``@AutoConfigureMockMvc``を付与してMockMvcの機能を有効化する。
+
+|(2)
+|``MockMvc``が有効化され、DIコンテナに格納されているため、``@Autowired``で取得できる。
+|===
+
+[[Test_Feature_Annotation_ImportAutoConfiugration]]
+==== @ImportAutoConfiugration
+指定した{AC}を有効にするためのアノテーション。 +
+また、逆に特定の{AC}を無効にすることもできる。 +
+<<Test_Feature_Annotation_AutoConfigure>>同様、このアノテーション単体では{SB}の機能をJUnit上で有効にすることはできない。 +
+ +
+``@ImportAutoConfiugre``に指定できる引数を下記に示す。 +
+
+[cols="20,10,70", options="header"]
+.@ImportAutoConfiugrationの引数
+|===
+|属性名
+|デフォルト値
+|概要
+
+|classes
+|-
+|有効にする{AC}クラスを指定する。
+
+|exclude
+|-
+|無効にする{AC}クラスを指定する。
+|===
+
+``@ImportAutoConfiguration``を使用したテストの実装を下記に示す。 +
+``@WebMvcTest``を使用する際にDozerライブラリを有効にすることを想定している。
+[source,java]
+.DozerTest.java
+----
+@WebMvcTest
+@ImportAutoConfiguration(DozerMapperAutoConfiguration.class) //(1)
+public classs DozerTest{
+
+    @Autowired
+    private DozerMapper mapper; //(2)
+
+    //omitted
+
+}
+----
+[cols="10,90", options = "header"]
+|===
+|項番
+|説明
+
+|(1)
+|``@ImportAutoConfiguration``でDozerの{AC}を指定して有効化する。
+
+|(2)
+|Dozerが有効化され、DIコンテナに格納されているため、``@Autowired``で取得できる。
+|===
+[IMPORTANT]
+後述の``@Import``アノテーションに{AC}を指定しても有効に働かないため、
+必ず``@ImportAutoConfiguration``アノテーションを使用する。
+
+[[Test_Feature_Annotation_Import]]
+==== @Import
+特定の``@Configuration``クラスを有効にするためのアノテーション。 +
+{SA}などで有効になる範囲外のクラスやコンフィギュレーションを有効化するために使用する。 +
+{SB}の機能ではなく{SF}と同じ機能であるため、詳細は説明しない。 +
+
+[[Test_Feature_Annotation_TestConfiguration]]
+==== @TestConfiguration
+テスト用のコンフィギュレーションであることを示すためのアノテーション。 +
+通常の``@Configuration``アノテーションが付与されたクラスとは異なり、このアノテーションが付与されたクラスは
+``@Import``で明示的に示さないと有効にならない。 +
+詳細は<<SpringBoot_architecture.adoc#Architecture_Test_Annotation_TestConfiguration,自作したテスト用のコンフィギュレーションクラスを適用する方法>>を参照すること。
+
+
+[[Test_Feature_Property]]
+=== テスト環境のプロパティの設定方法
+{SB}のアプリケーションでは、プロパティの設定方法が複数用意されている。 +
+その中で、テスト時に関係が深いものを下記に示す。 +
+同じプロパティが複数の場所に設定されている場合、優先度の高いものが設定される。 +
+なお、すべてのプロパティ設定方法は {reference_url}#boot-features-external-config[公式リファレンス]を参照すること。 +
+
+[cols="5,15,70",options="header"]
+.プロパティの設定方法
+|===
+|優先度
+|設定方法
+|概要
+
+|1
+|``@TestPropertySource``
+|プロパティを直接設定するかプロパティファイルを指定できる。 +
+
+|2
+|``@SpringBootTest``および{SA}のproperties属性
+|properties属性に``key = value``で指定できる。
+
+|3
+|src/test/resources配下のSpringBoot設定ファイル
+|デフォルトでは``application.yml``(または``application.properties``)が読み込まれる。
+
+|4
+|src/main/resources配下のSpringBoot設定ファイル
+|デフォルトでは``application.yml``(または``application.properties``)が読み込まれる。
+|===
+
+なお、実行時に使用するプロファイルを指定する場合は``@ActiveProfiles``アノテーションが利用できる。
+
+[[Test_Feature_Other]]
+=== その他テスト用機能
+
+[[Test_Feature_Other_WebTestClient]]
+==== WebTestClient
+Test環境下で利用できるHTTPクライアントである。 +
+WebFluxの機能を利用しているため、starterに``{SBS}-webflux``の追加が必要になる。 +
+ +
+``@WebFluxTest``もしくは``@SpringBootTest``でサーバを起動したテストではデフォルトで有効になっており、
+テスト対象のアプリケーションにリクエストを送り、受け取ったレスポンスを検証できるようになっている。 +
+``XPath``などを利用可能で、画面のテストもRESTのテストもどちらも対応している。
+``WebClient``と異なる点として下記の設定が自動的に行われることが上げられる。 +
+ +
+
+* テスト対象の{SB}アプリケーションのベースURLが組み込まれるため、リクエストを送る場合はベースURL以下を指定するだけでよい。
+
+WebTestClientによるテストの実装例を下記に示す。 +
+[source,java]
+.WebTestClientTest.java
+----
+
+@SpringBootTest(wevEnviroment = WebEnvironment.RANDOM_PORT) //(1)
+public class WebTestClientTest{
+
+    @Autowired
+    private WebTestClient webTestClient; //(2)
+
+    @Test
+    public void test(){
+        webTestClient.get().uri("/xxx").exchange().expectStatus().isOK(); //(3)
+
+        //omitted
+    }
+}
+----
+
+[cols="10,90", options = "header"]
+|===
+|項番
+|説明
+
+|(1)
+|``@SpringBootTest``アノテーションでサーバを起動し、WebTestClientを有効化する。
+
+|(2)
+|``@SpringBootTest``により有効化されるため、``@Autowired``で取得できる。
+
+|(3)
+|Fluent APIを採用しているため、``MockMvc``のようにリクエストの送信、レスポンスの受信、アサーションを書くことができる。
+|===
+
+
+[[Test_Feature_Other_TestRestTemplate]]
+==== TestRestTemplate
+Test環境下で利用できるHTTPクライアントである。 +
+``@SpringBootTest``アノテーションを利用したテストではデフォルトで有効になっており、
+テスト対象のアプリケーションにリクエストを送り、受け取ったレスポンスを検証できるようになっている。 +
+なお、画面の検証も可能ではあるが、HTMLを単純な文字列としてテストする必要があるため、画面のテストを行う場合は<<Test_Feature_Other_WebTestClient>>の使用を推奨する。 +
+{SB}ではHTTPクライアントとして``RestTemplate``が存在するが、継承関係にはなく、RestTemplateをラップしたクラスになる。 +
+``RestTemplate``と異なる点として下記の設定が自動的に行われることが上げられる。 +
+
+* cookieやredirectがデフォルトで無視される
+* テスト対象の{SB}アプリケーションのベースURLが組み込まれるため、リクエストを送る場合はベースURL以下を指定するだけでよい。 +
+
+TestRestTemplateによるテストの実装例は<<RestfulWebService.adoc#RestfulWebService_HowToTest_Feature,使用できるテスト機能>>を参照すること。
+
+[[Test_Feature_Other_OutPutCapture]]
+==== OutputCapture
+標準出力に出力された文字列をキャプチャできる機能。 +
+{SB}で用意された機能であるが、アプリケーションコンテキストを使用しないため、単独で使用できる。 +
+使用する際はテストクラスに``@ExtendWith(OutputCaptureExtension.class)``を付与する。 +
+実装例を下記に示す。
+
+[source,java]
+.OutputCaptureTest.java
+----
+@ExtendWith(OutputCaptureExtension.class) //(1)
+public class OutputCaptureTest{
+
+    @Test
+    public void test(CapturedOutput output /*(2)*/){
+        System.out.println("test");
+
+        assertThat(output).contains("test");  //(3)
+    }
+}
+----
+
+[cols="10,90", options = "header"]
+|===
+|項番
+|説明
+
+|(1)
+|OutputCaptureの機能を有効化する。
+
+|(2)
+|テストメソッドの引数でCapturedOutputを取得する。
+
+|(3)
+|キャプチャされている標準出力をアサートする。
+|===
+
+[[Test_Feature_Other_MockBean]]
+==== @MockBean/@SpyBean
+Bean定義されているクラスをMockitoのMock、もしくはSpyに差し替えることができるアノテーション。 +
+付与したクラスに対しては、Mockitoと同様テスト時の振る舞いを設定できる。 +
+``@Mock``やMock.init()によるMock化と異なり、Bean定義されているBeanをMock化されたBeanに完全に差し替える。 +
+そのため、対象のBeanを使用するクラスには、``@InjectMocks``を利用して明示的にインジェクションする必要がない。 +
+実装例を下記に示す。 +
+本実装例ではTodoControllerにTodoServiceがインジェクションされる想定となっている。
+
+[source,java]
+.MockTest
+----
+
+@WebMvcTest
+public class MockTest{
+
+    @MockBean //(1)
+    private TodoService todoService;
+
+    @Autowired
+    private TodoController todoController; //(2)
+
+    @Test
+    public void test(){
+        given(todoService.findById("test001")).willReturn(todo); //(3)
+        todoController.callTodoService("test001"); //(4)
+        then(todoService).should(times(1)).findById("test001"); //(5)
+    }
+}
+----
+
+[cols="10,90", options = "header"]
+|===
+|項番
+|説明
+
+|(1)
+|Mock化するクラスにアノテーションを付与する。
+
+|(2)
+|インジェクションされるクラスには特にアノテーションを付与する必要はない。
+
+|(3)
+|Mockの振る舞いを記述する。
+
+|(4)
+|TodoControllerからTodoService.findByIdメソッドを呼び出す。
+
+|(5)
+|TodoService.findByIdメソッドが一回呼び出されていることを確認する。
+|===

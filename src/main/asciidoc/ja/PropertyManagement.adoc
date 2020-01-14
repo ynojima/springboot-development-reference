@@ -1,0 +1,233 @@
+include::_include_all.adoc[]
+
+:sectnums: 4
+:toclevels: 6
+
+[[Ch05_PropertyManagemant]]
+= プロパティ管理
+
+[[Ch05_PropertyManagemant_Overview]]
+== {overview}
+Javaアプリケーションでは、一般的に環境依存値やアプリケーション設定値をプロパティファイルなどで外部化できる。 +
+{sb}のデフォルトでは、クラスパスに配置した``application.yml``(または``application.properties``)を設定ファイルとして読み込む。 +
+プロパティファイルなどを読み込む優先順位についてはlink:{reference_url}#boot-features-external-config[boot-features-external-config]を参照すること。 +
+
+設定ファイルを読み込む仕組みとして、{sb}では``@Value``に代わって``@ConfigurationProperties``が提供されている。 +
+この仕組みを使用することで、タイプセーフにJavaクラスとバインドさせることができる。 +
+また、``@ConfigurationProperties``ではRelaxed Bindingという仕組みにより柔軟に設定ファイルを読み込める。
+
+プロパティにランダムな値を指定する仕組みとして、``RandomValuePropertySource``が提供されている。 +
+「``random.*``」で始まる値を設定ファイルに定義することで使用できる。 +
+詳細はlink:{reference_url}#boot-features-external-config-random-values[config-random-values]を参照すること。 +
+
+[[Ch05_PropertyManagemant_HowToUse]]
+== {how_to_use}
+=== {starter_to_use}
+``{SBS}``のみで使用可能になるため、{SI}で「Dependencies」を指定する必要はない。
+
+=== {enable_auto_configuration}
+[[Ch05_PropertyManagemant_Enable_AutoConfiguration_Table]]
+``{SBS}``で有効になるプロパティの{AC}を下記に示す。
+[cols="30,70",options="header"]
+|===
+|クラス名
+|概要
+
+|``org.springframework.boot.autoconfigure.`` +
+``context.ConfigurationPropertiesAutoConfiguration``
+|``@ConfigurationProperties``アノテーションが注釈されたクラスをBean定義する。
+|===
+
+[[Ch05_PropertyManagemant_CustomizePoint]]
+=== {customization_points}
+==== {property_based_configuration}
+===== {sb}設定ファイルのカスタマイズ
+{sb}設定ファイルの格納場所や名前を変更する場合は、下記をコマンドライン引数に指定する。
+
+.代表的な設定値
+[cols="30,20,50",options="header"]
+|===
+|プロパティ名
+|デフォルト値
+|概要
+
+|``spring.config.name``
+|application
+|{sb}設定ファイルの名前を変更する。
+
+|``spring.config.location``
+|-
+|{sb}設定ファイルの格納場所を変更する。 +
+デフォルトの格納場所は検索対象外になる。
+
+|``spring.config.additional-location``
+|-
+|{sb}設定ファイルの格納場所を追加する。 +
+デフォルトの格納場所を検索した後に追加した場所を検索する。
+
+|===
+
+==== プロファイルの指定
+{sb}の設定ファイルは、プロファイルごとに読み込むファイルを切替えることができる。 +
+切替える場合は、``application-{profile}.yml``という命名規則でファイルをクラスパス上または``spring.config.location``で指定した場所に配置する。 +
+明示的にプロファイルを指定しなかった場合は``application-default.yml``、``application.yml``の順に読み込まれる。
+
+[[Ch05_PropertyManagemant_HowToUse_Basic_Implementation]]
+=== {functional_how_to_use}
+[[Ch05_PropertyManagemant_HowToUse_Basic_Implementation_Loading]]
+==== プロパティの読み込み方
+{GL}では、定義したプロパティをアプリケーションで読み込む方法を説明する。 +
+{sb}から提供されているプロパティについてはlink:{reference_url}#common-application-properties[common-application-properties]を参照すること。
+
+[[Ch05_PropertyManagemant_HowToUse_Basic_Implementation_ConfigurationProp]]
+===== ``@ConfigurationProperties``
+{sb}設定ファイルに定義したプロパティは、``@ConfigurationProperties``を注釈したクラスのフィールドにバインドできる。 +
+バインド方法には``@ConstructorBinding``のほかに、JavaBeansのSetterによるバインド方法が用意されている。 +
+プロパティの値をイミュータブル(不変)として扱えるため、{GL}では``@ConstructorBinding``の使用を推奨する。 +
+
+[source,yaml]
+.application.yml
+----
+system:
+  name: Office System
+  environment: dev
+  port: 8081
+  members:
+  - id: member01
+    password: password01
+  - id: member02
+    password: password02
+----
+
+上記プロパティに対して、下記のようにJava Beanを定義することで設定値がバインドされる。
+
+[source,java]
+.SystemConfig.java
+----
+@Getter
+@ConfigurationProperties(prefix="system") // (1)
+@ConstructorBinding // (2)
+public class SystemConfig {
+
+    private final String name; // (3)
+
+    private final String environment;
+
+    private final String url;
+
+    private final int port;
+
+    private final boolean debugEnabled; // (4)
+
+    private final List<Member> members; // (5)
+
+    public SystemConfig(String name, String environment,
+                      @DefaultValue("localhost") String url, // (6)
+                      @DefaultValue("8080") int port, // (7)
+                      boolean debugEnabled, List<Member> members) {
+          this.name = name;
+          this.environment = environment;
+          this.url = url;
+          this.port = port;
+          this.debugEnabled = debugEnabled;
+          this.members = members == null? Collections.emptyList() : members;
+    }
+}
+----
+
+[source,java]
+.Member.java
+----
+@Data
+public class Member {
+
+    private String id;
+
+    private String password;
+
+}
+----
+[cols="10,90",options="header"]
+|===
+|項番
+|概要
+
+|(1)
+|{sb}設定ファイルに定義した「system」で始まるプロパティを読み込む。 +
+prefixはケバブケースで記載する必要がある。
+
+|(2)
+|コンストラクタにより各設定値を対応するフィールドにバインディングする。 +
+コンストラクタが複数ある場合は、バインディング用のコンストラクタに直接注釈する。
+
+|(3)
+|フィールド名は{sb}設定ファイルに定義したキーと同じにする。
+
+|(4)
+|プロパティで設定していないのでfalseで初期化される。
+
+|(5)
+|配列で表現されたプロパティはCollection型にマッピングできる。
+
+|(6)
+|Javaソースでデフォルト値を設定できる。
+
+|(7)
+|プロパティで設定しているので値を上書きされる。
+
+|===
+
+``@ConfigurationProperties``を注釈したクラスはBeanとして（DIコンテナに）登録されるため、プロパティを必要とするクラスにインジェクションすることで使用可能になる。
+
+==== Relaxed Binding
+{sb}では、設定ファイルのキーとバインドするJavaBeanのプロパティ名が完全に一致している必要がない。 +
+ルールに従って、名前の揺らぎを補正するRelaxed Bindingという仕組みでバインドしている。 +
+
+[source,java]
+----
+@Getter
+@ConfigurationProperties("sample")
+public class SampleConfig {
+
+    private long connectionTimeout;
+
+    @ConstructorBinding
+    public SampleConfig(long connectionTimeout) {
+        this.connectionTimeout = connectionTimeout;
+    }
+}
+----
+
+上記のようなJavaBeanに対して、下記のプロパティがすべてバインド可能となっている。 +
+
+[source,yaml]
+.application.yml(ケバブケースの場合)
+----
+sample:
+  connection-timeout: 3600
+----
+
+[source,yaml]
+.application.yml(キャメルケースの場合)
+----
+sample:
+  connectionTimeout: 3600
+----
+
+[source,yaml]
+.application.yml(スネークケースの場合)
+----
+sample:
+  connection_timeout: 3600
+----
+
+[source,yaml]
+.application.yml(大文字形式の場合)
+----
+sample:
+  CONNECTION_TIMEOUT: 3600
+----
+
+[[Ch05_PropertyManagemant_Test]]
+== {test}
+プロパティ管理について、{sb}特有のテスト機能は提供されていないため、{GL}では割愛する。

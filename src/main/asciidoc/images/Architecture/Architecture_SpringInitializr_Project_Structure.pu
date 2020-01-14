@@ -1,0 +1,29 @@
+@startsalt
+{
+{T
+<application-root>
++ <&folder> src
+++ <&folder> main
++++ <&folder> java
+++++ <&folder> com
++++++ <&folder> example
+++++++ <&folder> demo // (1)
++++++++ <&file> DemoApplication.java // (2)
++++ <&folder> resources
+++++ <&folder> static // (3)
+++++ <&folder> templates // (4)
+++++ <&file> application.properties // (5)
+++ <&folder> test
++++ <&folder> java
+++++ <&folder> com
++++++ <&folder> example
+++++++ <&folder> demo
++++++++ <&file> DemoApplicationTests.java // (6)
++ <&folder> .mvn // (7)
+<&file> HELP.md // (8)
+<&file> mvnw // (9)
+<&file> mvnw.cmd // (9)
+<&file> pom.xml // (10)
+}
+}
+@endsalt

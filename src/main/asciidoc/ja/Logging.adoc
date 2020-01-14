@@ -1,0 +1,222 @@
+include::_include_all.adoc[]
+
+:sectnums: 4
+:toclevels: 6
+
+[[Ch05_Logging]]
+= ロギング
+
+[[Ch05_Logging_Overview]]
+== {overview}
+{sb}は特定のロギングライブラリには依存せず、開発者が任意の実装を選択できる仕組みになっている。 +
+デフォルトのロギングライブラリとして下記の機能が提供されている。 +
+
+* Logback
+* Log4j2
+* Java Util Logging
+
+{GL}では、Logback(+SLF4J)についてのみ説明する。 +
+
+デフォルト設定の場合、Logbackによってコンソールログが出力される。 +
+ログをファイルに出力する場合は、{sb}の設定ファイル(``application.yml``または``application.properties``)に、パスまたはファイルを指定する必要がある。 +
+
+[NOTE]
+Logback以外の使用方法についてはlink:{reference_url}#howto-configure-log4j-for-logging[公式リファレンス]を参照すること。
+
+[[Ch05_Logging_HowToUse]]
+== {how_to_use}
+=== {starter_to_use}
+``{SBS}-logging``を依存関係に追加することで有効になる。 +
+ただし、``{SBS}``のみで使用可能になるため、開発者があらためて追加する必要はない。
+
+=== {enable_auto_configuration}
+[[Ch05_Logging_Enable_AutoConfiguration_Table]]
+ロギングの設定は、{ac}ではなくアプリケーション起動時に``org.springframework.boot.SpringApplication.run()``内で初期化される。 +
+
+=== {customization_points}
+==== {property_based_configuration}
+{sb}設定ファイルに設定値を設定することでロギングの設定ができる。 +
+詳細な設定値については、link:{reference_url}#core-properties[Core properties]の``logging.*``で始まる値を参照すること。
+
+[cols="20,15,65",options="header"]
+.代表的な設定値
+|===
+|プロパティ名
+|デフォルト値
+|概要
+
+|``debug``
+|false
+|組み込みコンテナやHibernate、Spring等のコアなモジュールのデバッグログを出力するかどうかを指定する。 +
+自作クラス内で出力するログレベルには適用されない。
+
+|``logging.config``
+|-
+|ロギング設定ファイル(logback-spring.xmlなど)のパスを指定する。 +
+未指定の場合はclasspath:logback.xmlを使用する。
+
+|``logging.file.name``
+|-
+|出力するログファイルの名前を指定する。 +
+ファイル名はカレントディレクトリへの絶対パスまたは相対パスで表記する。
+
+|``logging.file.path``
+|-
+|ログファイル(spring.log)を出力するパスを指定する。 +
+``logging.file.name``が設定されている場合、パスの設定は無視される。
+
+|``logging.level.*``
+|-
+|パッケージ単位でログレベルを指定する。 +
+レベルはTRACE, DEBUG, INFO, WARN, ERROR, OFFから１つ選択する。
+|===
+
+==== XML(Groovy) Based Configuration
+{sb}設定ファイルで用意されているプロパティ以外でロギングを設定する場合は、logback-spring.xml(.groovy)に記述する。 +
+作成したxml(またはgroovy)ファイルは、``logging.config``で指定したパスに配置することで、アプリケーション起動時に読み込まれる。 +
+
+[NOTE]
+{sb}にはLogbackの拡張機能が用意されている。 +
+これらを使用するためには、設定ファイルの名前をlogback.xml(.groovy)ではなくlogback-spring.xml(.groovy)にする必要がある。 +
+.groovy形式の設定ファイルを使用する場合はgroovy-allを依存関係に追加する必要がある。
+
+[TIP]
+====
+{sb}では、Logbackの初期設定として下記のファイルを読み込んでいる。 +
+下記のファイルは、spring-boot-[version].jarの``org.springframework.boot.logging.logback``に配置されている。
+
+.Logbackのデフォルト設定ファイル一覧
+[cols="30,70",options="header"]
+|===
+|ファイル名
+|概要
+|defaults.xml
+|デフォルトのロガー構成、変換ルール、書式が定義されている。
+|console-appender.xml
+|デフォルトのコンソール出力方法が定義されている。
+|file-appender.xml
+|デフォルトのファイル出力方法が定義されている。
+|base.xml
+|上記の3ファイルがincludeされている。 +
+現在は旧バージョンとの互換性のために提供されている。
+|===
+====
+
+===== 設定の優先順位
+{sb}設定ファイルとLogback設定ファイルの両方に設定した場合は、Logback設定ファイルが優先される。 +
+
+===== プロファイルによる設定の切替え
+Logbackの設定をプロファイルごとに切替える手段として、``<springProfile>``タグが{sb}から提供されている。 +
+このタグは、Logbackにおける``<configuration>``タグの範囲内でサポートされ、プロファイル名をname属性に指定して使用する。 +
+name属性には、プロファイル名以外に判定文も指定できる。詳細はlink:{reference_url}#profile-specific-configuration[公式リファレンス]を参照すること。
+
+[source,xml]
+.logback-spring.xml(springProfile)
+----
+<springProfile name="staging">
+    <!-- (1) -->
+</springProfile>
+<springProfile name="dev | staging">
+    <!-- (2) -->
+</springProfile>
+
+----
+[cols="10,90",options="header"]
+|===
+|項番
+|概要
+
+|(1)
+|プロファイルが"staging"の場合に有効になる。
+
+|(2)
+|プロファイルが"dev"または"staging"の場合に有効になる。
+|===
+
+===== {sb}設定ファイルの参照
+Logback設定ファイルから{sb}設定ファイルの値を参照する方法として、``<springProperty>``タグが{sb}から提供されている。 +
+プロパティのキーをsource属性に指定することで、Logbackの``<property>``タグのように値を設定ファイル内で使用できる。 +
+本機能は、ロギングに使用する追加ライブラリのパラメータを外部化したい場合などに効果的である。
+
+[source,xml]
+.logback-spring.xml(springProperty)
+----
+<!-- (1) -->
+<springProperty scope="context" name="fluentHost" source="app.fluentd.host" defaultValue="localhost"/>
+<appender name="FLUENT" class="ch.qos.logback.more.appenders.DataFluentAppender">
+    <remoteHost>${fluentHost}</remoteHost>
+    <!-- omitted -->
+</appender>
+----
+[cols="10,90",options="header"]
+|===
+|項番
+|概要
+
+|(1)
+|{sb}設定ファイルの``app.fluentd.host``がプロパティ名「fluentHost」で使用できるようになる。
+|===
+
+[[Ch05_Logging_HowToUse_Basic_Implementation]]
+=== {functional_how_to_use}
+{GL}では、SLF4Jによる一般的なログの出力例を示す。
+
+[source,java]
+.ログ出力例
+----
+import lombok.extern.slf4j.Slf4j;
+// omitted
+
+@SpringBootApplication
+@slf4j
+public class LoggingApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(LoggingApplication.class, args);
+        log.info("start application");  // (1)
+    }
+}
+
+----
+
+[cols="10,90",options="header"]
+|===
+|項番
+|概要
+
+|(1)
+|INFOレベルでログが出力される。 +
+|===
+
+[TIP]
+====
+Logback設定ファイルで指定したレベル以上のログのみ出力されるため、基本的にはログレベルのチェックをする必要はない。 +
+ただし、引数のメッセージ生成をメソッド呼び出しで行うような場合は、性能面で呼び出しコストを抑えるためにログレベルでの判定処理を実装する必要がある。
+
+[source,java]
+.ログレベルのチェックが必要なソース例
+----
+if (log.isDebugEnabled()) {
+    log.debug(result.getMessage())
+}
+----
+====
+
+[[Ch05_Logging_Test]]
+== {test}
+=== {test_function}
+テスト時のログ確認機能として、コンソールログに出力された文字列をキャプチャする``OutputCaputure``が提供されている。 +
+詳細は
+ifeval::["{docname}" != "single_index"]
+<<Test.adoc#Test_Feature_Other_OutputCapture, OutputCapture>>
+endif::[]
+ifeval::["{docname}" == "single_index"]
+<<Test_Feature_Other_OutputCapture, OutputCapture>>
+endif::[]
+を参照すること。
+
+[NOTE]
+.TODO
+====
+OutputCaptureへのリンク貼り付け
+====

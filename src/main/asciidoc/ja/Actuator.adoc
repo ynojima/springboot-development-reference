@@ -1,0 +1,149 @@
+include::_include_all.adoc[]
+
+:sectnums: 4
+:toclevels: 6
+
+[[Ch05_actuator]]
+= Actuator
+
+[[Ch05_actuator_Overview]]
+== 機能説明
+{SBAC}は、{SB}で作成したアプリケーションのメトリクス収集機能やヘルスチェックを行うためのエンドポイントを提供する。 +
+この機能を有効にするとHTTPまたは、JMXのエンドポイントを介してアプリケーション情報を取得できる。 +
+{GL}では、JMXよりも容易に扱えるHTTPエンドポイントを前提として説明する。 +
+また、各機能については概要のみ説明する。詳細はlink:{reference_url}#production-ready[公式リファレンス]を参照すること。
+
+=== {starter_to_use}
+``{SBS}-actuator``を依存関係に追加することで有効になる。
+
+=== {enable_auto_configuration}
+spring-boot-actuator-autoconfigure.jarの``/META-INF/spring.factories``に定義されている。 +
+
+=== 提供されるエンドポイント
+{SBAC}が公開しているエンドポイント情報はコンテキストにアクセスすることで取得できる。 +
+デフォルトの場合、``{CTX}``というコンテキスト配下に``/info``と``/health``というHTTPエンドポイントを公開する。 +
+エンドポイントの一覧はlink:{reference_url}#production-ready-endpoints[公式リファレンス]を参照すること。 +
+
+公開するHTTPエンドポイントを変更する場合は下記のプロパティを{sbcf}に定義する。 +
+
+[cols="40,15,45",options="header"]
+|===
+|プロパティ名
+|デフォルト値
+|概要
+
+|``management.endpoints.web.base-path``
+|{CTX}
+|HTTPエンドポイントの共通コンテキストを指定する。
+
+|``management.endpoints.web.exposure.include``
+|info, health
+|公開するエンドポイントを指定する。 +
+「*」を指定すると「/shutdown」を除くすべてのエンドポイントが公開される。
+
+|``management.endpoints.web.exposure.exclude``
+|-
+|公開しないエンドポイントを指定する。 +
+「*」を指定するとすべてのエンドポイントが非公開になる。
+|===
+
+[IMPORTANT]
+{SBAC}が公開するエンドポイントはセキュリティ保護されていない。 +
+アプリケーション情報の漏洩を防止するために{SSE}などでアクセス制御をする必要がある。
+
+==== ヘルスチェック
+healthエンドポイントを使用することでアプリケーションのヘルスチェックを行うことができる。 +
+``management.endpoint.health.show-details``プロパティでhealthエンドポイントが返す値を変更できる。
+
+[cols="20,80",options="header"]
+.management.endpoint.health.show-detailsに指定できる値
+|===
+|名前
+|概要
+
+|never
+|詳細情報を常に返却しない。
+
+|when-authorized
+|``management.endpoint.health.roles``で指定したロールを持つユーザの場合に詳細情報を返却する。
+
+|always
+|詳細情報を常に返却する。
+|===
+
+===== ヘルスチェックのカスタマイズ
+独自のヘルスチェックを追加するには``HealthIndicator``を実装してBean定義を行う。 +
+追加したヘルスチェックの識別子はBeanの名前から「HealthIndicator」を除いたものになる。 +
+下記のソースの場合は``/actuator/health/app``でヘルスチェックの情報を取得できる。 +
+``HealthIndicator``の実装例はlink:{reference_url}#reactive-health-indicators[公式リファレンス]を参照すること。
+
+[source,java]
+.HealthIndicatorのBean定義例
+----
+@Configuration
+public class ApplicationBeans {
+
+    @Bean
+    public HealthIndicator appHealthIndicator() {
+        return new AppHealthIndicator(); // (1)
+    }
+}
+----
+[cols="10,90",options="header"]
+.ApplicationBeans.javaの説明
+|===
+|項番
+|概要
+
+|(1)
+|HealthIndicatorの独自実装クラス。
+|===
+
+==== ロガーの設定変更
+{SBAC}ではアプリケーションのログレベル設定を取得または、変更する機能が提供されている。 +
+``{CTX}/loggers/(ロガー名)``へのGETリクエストで取得、POSTリクエストで変更できる。 +
+変更の場合はリクエストボディにconfiguredLevelでログレベルを指定する。
+
+.リクエストボディ
+[source,json]
+----
+{
+    "configuredLevel": "TRACE"
+}
+----
+
+==== HTTPトレース
+{SBAC}ではHTTPのリクエスト/レスポンスをトレースする機能が提供されている。 +
+有効にするには``HttpTraceRepository``の実装クラスをBean定義する必要がある。 +
+{sb}が提供している実装クラスの``InMemoryHttpTraceRepository``はデフォルトで100個のリクエスト/レスポンス情報をインメモリに保持する。 +
+``management.trace.http.include``プロパティで保持するリクエスト/レスポンスの情報を設定することができる。 +
+
+ただし、``InMemoryHttpTraceRepository``は他のトレーシングソリューションに比べて機能が不足しているため、開発環境のみでの使用が推奨されている。 +
+本番環境では、実稼働向けであるZipkinやSpring Cloud Sleuthなどを使用するか、独自で``HttpTraceRepository``の実装を行うこと。 +
+
+==== メトリクスの取得
+{SBAC}はMicrometerによるメトリクス収集が可能になっている。 +
+使用可能なメトリクスを``/actuator/metrics``で取得し、``/actuator/metrics/(メーター名)``でメーターの詳細な情報を取得できる。 +
+{sb}がサポートするメトリクスはlink:{reference_url}#production-ready-metrics-meter[公式リファレンス]を参照すること。
+
+==== 認証イベントの監査
+{SBAC}では{sse}の認証イベントを監査する機能が提供されている。 +
+この機能は認証イベントのレポート作成や、認証失敗の情報を使用したロックアウトさせたいユーザの抽出などに利用できる。 +
+有効にするには``AuditEventRepository``の実装クラスをBean定義する必要がある。 +
+{sb}が提供している実装クラスの``InMemoryAuditEventRepository``はデフォルトで1000個の認証イベント情報をインメモリに保持する。 +
+ただし、``InMemoryAuditEventRepository``は実稼働環境で使用するには機能が不足しているため、開発環境のみでの使用が推奨されている。 +
+本番環境では、独自で``AuditEventRepository``の実装を行うこと。 +
+
+==== プロセス監視
+{SBAC}はプロセスIDと使用しているポート番号をファイルに出力するクラスを提供している。 +
+``ApplicationPidFileWriter``はapplication.pidというファイルにアプリケーションのプロセスIDを出力する。 +
+``WebServerPortFileWriter``はapplication.portというファイルにアプリケーションの使用しているポート番号を出力する。 +
+上記のクラスはアプリケーションのルートディレクトリ直下にファイルを出力するが、出力処理でFile.deleteOnExit()を呼び出すため、ファイルはJVMの停止時に削除される。 +
+
+この機能はデフォルトで無効になっているため、有効にする場合は使用するクラスを``ApplicationListener``に下記のどちらかの方法で追加する必要がある。
+
+* link:{reference_url}#production-ready-process-monitoring-configuration[META-INF/spring.factoriesを使用して追加する]
+* link:{reference_url}#production-ready-process-monitoring-programmatically[SpringApplication.addListeners(…​)で追加する]
+
+==== Cloud Foundryへのサポート
+{SBAC}はCloud Foundryへのサポートを提供しており、Cloud Foundryの管理UIに{SBAC}情報を追加できる。 +

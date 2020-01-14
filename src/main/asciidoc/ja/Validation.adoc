@@ -1,0 +1,293 @@
+include::_include_all.adoc[]
+
+:sectnums: 4
+
+[[Validation]]
+= 入力チェック
+
+[[Validation_Overview]]
+== {overview}
+{SB}のWebアプリケーションにおける入力チェックの機能概要について説明する。 +
+{SB}では、下記の2つの入力チェック機能をサポートしている。 +
+
+* Controllerへバインドされるオブジェクトに対するValidation
+* AOPを利用した、アプリケーション内の任意のメソッドに対するValidation
+
+入力値のチェックはBean Validationの実装であるHibernate Validatorを利用しており、{AC}によって初期設定が行われる。 +
+どちらのValidationも、デフォルトのバリデーションメッセージはHibernate ValidatorのJar内に記述されている``ValidationMessages.properties``を参照し設定される。 +
+
+[[Validation_HowToUse]]
+== {how_to_use}
+
+[[Validation_HowToUse_Starter]]
+=== {starter_to_use}
+下記のStarterをpom.xmlに追加することで、Hibernate Validatorが設定されアプリケーション内で利用できるようになる。 +
+
+* {SBSW}
+
+[NOTE]
+実際は、{SBSW}が依存性としてもつ{SBS}-validationがHibernateの設定などを行う。
+
+
+[[Validation_HowToUse_Auto_Configration]]
+=== Starterにより有効になる{AC}
+追加したStarterにより、下記の{AC}が有効になる。 +
+
+[cols="30,70", options="header"]
+.有効になる{AC}
+|===
+|{AC}
+|概要
+
+|``org.springframework.boot.autoconfigure.`` +
+``validation.ValidationAutoConfiguration``
+|Validatorオブジェクトの初期設定を行う。
+
+|``org.springframework.boot.autoconfigure.`` +
+``web.servlet.WebMvcAutoConfiguration``
+|ValidationAutoConfigurationで設定されたValidatorが、Controllerの引数のオブジェクトがチェックできるように設定を行う。
+
+|``org.springframework.boot.autoconfigure.`` +
+``aop.AopAutoConfiguration``
+|ValidationAutoConfigurationで設定されたValidatorが、Aopを利用してチェックできるように設定を行う。
+|===
+
+[[Validation_HowToUse_Implementation]]
+=== {functional_how_to_use}
+<<Validation_Overview,機能概要>>で述べたように入力チェックは複数のパターンで行うことができるため、各実装例を下記に示す。 +
+
+[[Validation_HowToUse_Implementation_BeanValidation]]
+==== Controllerへバインドされるオブジェクトに対するValidation
+本実装例でControllerへバインドされるオブジェクトを下記に示す。 +
+なお、本オブジェクトはLombokを使用してgetter/setterを省略している。 +
+
+[[Person]]
+[source,java]
+.Person.java
+----
+@Data
+public class Person {
+
+  @NotBlank //(1)
+  private String name;
+
+  @Max(140) //(2)
+  @NotNull //(3)
+  private Integer age;
+}
+----
+[cols="10,90",options="header"]
+|===
+|項番
+|概要
+
+|(1)
+|対象のフィールドが少なくとも一文字以上の空文字を除いた文字列であることを示すアノテーション。
+
+|(2)
+|対象のフィールドが最大で140の数であることを示すアノテーション。
+
+|(1)
+|対象のフィールドがNullでないことを示すアノテーション。
+|===
+
+[[Validation_HowToUse_Implementation_BeanValidation_Form]]
+===== 画面から入力されたオブジェクトに対する入力チェック
+画面から入力され、Controllerにバインドされたオブジェクトに対して行う入力チェックの方法および、チェックでエラーになった場合のハンドリング方法を示す。 +
+チェック対象のオブジェクトは<<Person,Personオブジェクト>>を使用し、テンプレートエンジンとして{TH}を利用している。
+
+[source, java]
+.FormValidationController.java
+----
+@Controller
+@RequestMapping("form")
+public class FormValidationController {
+
+	@PostMapping("valid")
+	public String validPersonForm(@Valid /*(1)*/ Person person, BindingResult result /*(2)*/) {
+		if (result.hasErrors()) {
+			return "invalid"; //(3)
+		}
+		return "ok";
+	}
+}
+----
+[cols="10,90",options="header"]
+|===
+|項番
+|概要
+
+|(1)
+|入力チェックの対象のオブジェクトを``@Valid``アノテーションで指定する。
+
+|(2)
+|今回の方法では入力チェックでエラーになった場合は``org.springframework.validation.BindingResult``オブジェクトに結果が格納され、例外はスローされない。 +
+BindingResultオブジェクトは必ず入力チェックを行うオブジェクトのすぐ後ろの引数に設定する。
+
+|(3)
+|BindingResultに入力チェックエラーが設定されていた場合、View名としてinvalidを返す。
+|===
+
+入力チェックでエラーになった場合、上記に示したようにBindingResultオブジェクトに結果が格納され、例外クラスはスローされない。 +
+本実装例では、入力チェックでエラーになった場合Controllerは``invalid``というView名が返却され、下記のViewにBindingResultに格納された入力エラーのメッセージが表示される。 +
+
+[source,html]
+.invalid.html
+----
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+    <head>
+        <meta charset="UTF-8" />
+        <title>invalid</title>
+    </head>
+    <body>
+         <div th:object="${person}">
+             <!-- (1) -->
+             name:<span class="text-danger" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></span>
+             <!-- (2) -->
+             age:<span class="text-danger" th:if="${#fields.hasErrors('age')}" th:errors="*{age}"></span>
+        </div>
+    </body>
+</html>
+----
+[[validhtml_Annotation]]
+[cols="10,90",options="header"]
+|===
+|項番
+|概要
+
+|(1)
+|Personオブジェクトのname要素の入力チェックがエラーになった場合にエラーメッセージを表示する。
+
+|(2)
+|Personオブジェクトのage要素の入力チェックがエラーになった場合にエラーメッセージを表示する。
+
+|===
+
+[[Validation_HowToUse_Implementation_BeanValidation_RequestBody]]
+===== RESTで入力されたオブジェクトの入力チェック
+RESTで入力されたオブジェクトは``@RequestBody``アノテーションを用いてControllerの引数にバインドできる。 +
+本項では、その方法でバインドされたオブジェクトに対する入力チェックの方法を示す。 +
+チェック対象のオブジェクトは<<Person,Personオブジェクト>>を使用する。
+
+[source,java]
+.RequestBodyValidationController.java
+----
+@RestController
+@RequestMapping("body")
+public class RequestBodyValidationController {
+
+	@PostMapping("valid")
+	public String validPersonDto(@RequestBody @Valid /*(1)*/ Person person) {
+		return "ok";
+	}
+}
+----
+[[RequestBodyValidationController_Annotation]]
+[cols="10,90",options="header"]
+|===
+|項番
+|概要
+
+|(1)
+|``@RequestBody``アノテーションの後に@Validアノテーションを付与することで、``@RequestBody``でバインドされるオブジェクトの入力チェックが有効になる。
+
+|===
+
+本実装例のように``@RequestBody``でバインドされたオブジェクトに対する入力チェックでは、<<Validation_HowToUse_Implementation_BeanValidation_Form,画面から入力されたオブジェクトに対する入力チェック>>
+とは異なり、BindingResultに結果が格納されず、``org.springframework.web.bind.MethodArgumentNotValidException``例外がスローされる。 +
+そのため、入力チェックのハンドリングは<<ErrorHandling.adoc#ErrorHandling,例外ハンドリング>>で示した方法で行う。
+
+[[Validation_HowToUse_Implementation_MethodValidation]]
+==== アプリケーション内の任意のメソッドに対するValidation
+
+{SB}では、<<Validation_HowToUse_Implementation,実装例>>で述べたように、AOPの仕組みを利用し、アプリケーション内の任意のメソッドの引数と返り値のチェックを行うことができる。 +
+例として、Serviceクラスのメソッドに対する実装方法を下記に示す。
+
+===== Serviceクラスの入力値、返り値に対するValidation
+
+[source,java]
+.MethodValidationService.java
+----
+@Service
+@Validated //(1)
+public class MethodValidationService {
+
+	@Min(20) //(2)
+	public Integer validService(@Min(10) /*(3)*/Integer id) {
+		return id;
+	}
+}
+
+----
+[cols="10,90",options="header"]
+|===
+|項番
+|概要
+
+|(1)
+|AOPによるValidationの対象クラスであることを示すために``@Validated``アノテーションをクラスに付与する。
+
+|(2)
+|返り値が20以上であることを示すアノテーション。
+
+|(3)
+|引数であるidの値が10以上であることを示す。
+
+|===
+
+AOPの仕組みを利用した入力チェックでは``javax.validation.ConstraintViolationException``例外がスローされる。 +
+そのため、入力チェックのハンドリングは<<ErrorHandling.adoc#ErrorHandling,例外ハンドリング>>で示した方法で行う。 +
+ +
+上記したようにアプリケーション内の任意のメソッドに対してチェックを行えるため、Controllerの``@PathVariable``アノテーションでバインドされたパラメータに対するチェックも可能である。 +
+例を下記に示す。 +
+
+[source, java]
+.PathVariableValidationController.java
+----
+@Validated //(1)
+@RestController
+@RequestMapping("path")
+public class PathVariableValidationController {
+
+	@GetMapping("{pathId}")
+	public String validPathParameter(@PathVariable /*(2)*/ @Max(150) /*(3)*/ Integer pathId) {
+		return "OK";
+	}
+}
+----
+[cols="10,90",options="header"]
+|===
+|項番
+|概要
+
+|(1)
+|AOPによるValidationの対象クラスであることを示すために@Validatedアノテーションをクラスに付与する。
+
+|(2)
+|URIで指定されたパラメータを引数にバインドするアノテーション。
+
+|(3)
+|引数であるpathIdの値が150以下であることを示す。
+|===
+
+[WARNING]
+AOPによるメソッドの入力チェックは、AOPの機能が利用できないprivateメソッドなどの条件下では利用できない。
+
+
+[[Validation_HowToUse_Customize]]
+=== {customization_example}
+本節では、Hibernate ValidatorのJarに存在するデフォルトの``ValidationMessages.properties``で設定されている入力エラー時のメッセージに加え、個別にメッセージを定義する方法を示す。 +
+個別にメッセージを定義する場合は、``ValidationMessages.properties``をクラスパス直下に配置し、``メッセージキー = メッセージ``の形式で記述する。 +
+この場合、同じメッセージキーのものがHibernate ValidatorのJarの``ValidationMessages.properties``に存在する場合は上書きされる。
+``@NotEmpty``アノテーションによる入力チェックのメッセージを上書きする``ValidationMessages.properties``の例を下記に示す。 +
+
+[source,java]
+.ValidationMessages.properties
+----
+javax.validation.constraints.NotEmpty.message = customized message for NotEmpty
+----
+
+[[Validation_HowToTest]]
+== {test}
+入力チェックについて、{SB}特有のテスト機能は提供されていないため、{GL}では割愛する。

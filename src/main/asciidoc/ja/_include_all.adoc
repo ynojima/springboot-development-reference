@@ -1,0 +1,82 @@
+// 各adocファイルに対し設定する項目を記述するためのadoc
+
+// 項番の表示個数を定義する
+:sectnumlevels: 10
+
+// Table, Exampleブロックのキャプションを無効にする
+:example-caption!:
+:table-caption!:
+:figure-caption!:
+
+// indexページへのリンク先を定義する
+:index_ref: "index.html"
+
+// ドキュメント全体で使用される名称等を定義する
+:AC: Auto-configuration
+:DT: Developer Tools
+:EJ: 実行可能Jar
+:SF: Spring Framework
+:SB: Spring Boot
+:SBA: {SB} auto-configuration
+:SBC: {SB} CLI
+:SBT: {SB} Test
+:SD: Spring Data
+:SDR: {SD} Redis
+:SI: Spring Initializr
+:SM: Spring MVC
+:SBMP: {SB} Maven plugin
+:SS: Spring Session
+:SW: Spring Web
+:ST: Spring Test
+:SBT: Spring Boot Test
+:SWS: {SW} Starter
+:SP: Spring Profiles
+:SA: テストスライス・アノテーション
+:SBCF: Spring Boot設定ファイル
+:SLT: スライステスト
+:DS: DispatcherServlet
+:GL: 本ドキュメント
+:HSC: HTTPステータスコード
+:SBS: spring-boot-starter
+:SBSW: {SBS}-web
+:SSE: Spring Security
+:TH: Thymeleaf
+:SPDJ: Spring Data JPA
+:mybatis : MyBatis3
+:MYSP: Mybatis-Spring
+:SBAC: Spring Boot Actuator
+:CTX: /actuator
+:ES: 組込サーバ
+
+:spring_integration_version: 2.2.0.RELEASE
+:ss_integration_version: 5.2.0.RELEASE
+:reference_url: https://docs.spring.io/spring-boot/docs/{spring_integration_version}/reference/htmlsingle/
+:si_reference_url: https://docs.spring.io/initializr/docs/current/reference/html/
+:github_url: https://github.com/spring-projects/spring-boot/blob/v{spring_integration_version}/
+:ss_reference_url: https://docs.spring.io/spring-security/site/docs/{ss_integration_version}/reference/htmlsingle/
+
+:server5_fullname: TERASOLUNA Server Framework for Java (5.x)
+:server5_shortname: TERASOLUNA Server 5.x
+:server5_url: http://terasolunaorg.github.io/guideline/5.5.1.RELEASE/ja
+:server5_guide: TERASOLUNA Server 5.x 開発ガイドライン
+
+:batch5_fullname: TERASOLUNA Batch Framework for Java (5.x)
+:batch5_shortname: TERASOLUNA Batch 5.x
+:server5_url: https://terasoluna-batch.github.io/guideline/current/ja/single_index.html
+:batch5_guide: TERASOLUNA Batch 5.x 開発ガイドライン
+
+:overview: 機能概要
+:how_to_use: 使用方法
+:starter_to_use: 使用するStarter
+:enable_auto_configuration: 有効になる{AC}
+:customization_points: カスタマイズポイント
+:property_based_configuration: Property Based Configuration
+:bean_based_configuration: Bean Based Configuration
+:functional_how_to_use: 実装例
+:customization_example: カスタマイズ例
+:test: テスト
+:test_starter_to_use: 使用するStarter
+:test_function: 使用できるテスト機能
+:test_customization_points: カスタマイズポイント
+:test_how_to_use: 使い方
+:test_customization_example: カスタマイズ例
